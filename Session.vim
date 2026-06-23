@@ -10,18 +10,19 @@ if expand('%') == '' && !&modified && line('$') <= 1 && getline(1) == ''
 endif
 let s:shortmess_save = &shortmess
 set shortmess+=aoO
-badd +157 main.go
-badd +13 ~/repos/gcgbarbosa/gcgb-md/docs/test.md
+badd +1 ~/repos/gcgbarbosa/gcgb-md/docs/test.md
 badd +1 ~/repos/gcgbarbosa/gcgb-md/docs/setup.md
+badd +1 ~/repos/gcgbarbosa/gcgb-md/docs/fuck--yeahhhh---.md
+badd +21 mise.toml
+badd +1 ~/repos/gcgbarbosa/gcgb-md/gcgb-md.toml
+badd +1 main.go
+badd +1 ~/repos/gcgbarbosa/gcgb-md/docs/setup-test-fuudeu-nois-dois.md
+badd +1 ~/repos/gcgbarbosa/gcgb-md/docs/fuck--yeahhhh.md
+badd +5 docs/test-bora.md
 argglobal
 %argdel
 $argadd main.go
-edit main.go
-let s:save_splitbelow = &splitbelow
-let s:save_splitright = &splitright
-set splitbelow splitright
-let &splitbelow = s:save_splitbelow
-let &splitright = s:save_splitright
+edit docs/test-bora.md
 wincmd t
 let s:save_winminheight = &winminheight
 let s:save_winminwidth = &winminwidth
@@ -30,7 +31,6 @@ set winheight=1
 set winminwidth=0
 set winwidth=1
 argglobal
-balt ~/repos/gcgbarbosa/gcgb-md/docs/test.md
 setlocal foldmethod=expr
 setlocal foldexpr=v:lua.vim.lsp.foldexpr()
 setlocal foldmarker={{{,}}}
@@ -39,24 +39,12 @@ setlocal foldlevel=99
 setlocal foldminlines=1
 setlocal foldnestmax=10
 setlocal foldenable
-40
-sil! normal! zo
-56
-sil! normal! zo
-99
-sil! normal! zo
-136
-sil! normal! zo
-136
-sil! normal! zo
-154
-sil! normal! zo
-let s:l = 157 - ((20 * winheight(0) + 21) / 42)
+let s:l = 5 - ((4 * winheight(0) + 21) / 42)
 if s:l < 1 | let s:l = 1 | endif
 keepjumps exe s:l
 normal! zt
-keepjumps 157
-normal! 0
+keepjumps 5
+normal! 02|
 tabnext 1
 if exists('s:wipebuf') && len(win_findbuf(s:wipebuf)) == 0 && getbufvar(s:wipebuf, '&buftype') isnot# 'terminal'
   silent exe 'bwipe ' . s:wipebuf

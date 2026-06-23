@@ -6,11 +6,11 @@ disable_tools = ["go"]
 
 [tasks.build]
 description = "Compile the LSP binary locally"
-run = "go build -o gcgb-md main.go"
+run = "go build -o gcgb-md ./cmd/gcgb-md-lsp"
 
 [tasks.install]
 description = "Install globally so Neovim can launch it from anywhere"
-run = "go build -o ~/go/bin/gcgb-md main.go"
+run = "go build -o ~/go/bin/gcgb-md ./cmd/gcgb-md-lsp"
 
 [tasks.format]
 description = "Format code and organize imports"
@@ -19,3 +19,11 @@ run = "goimports -w . && go fmt ./..."
 [tasks.tidy]
 description = "Download missing modules and remove unused ones"
 run = "go mod tidy"
+
+[tasks.test]
+description = "Run the unit test suite"
+run = "go test -v ./..."
+
+[tasks.clean]
+description = "Clean build artifacts"
+run = "rm -f gcgb-md && rm -rf dist/"
