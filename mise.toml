@@ -1,0 +1,2 @@
+[tasks.build]
+run = "go build -o gcgb-md main.go"
