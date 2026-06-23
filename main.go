@@ -21,7 +21,8 @@ type DocumentInfo struct {
 	Content []byte
 	AST     ast.Node
 	Links   []ExtractedLink
-	Title   string // Caches the file's primary # Title
+	Title   string // Caches the file's primary # Title (or fallback)
+	HasH1   bool   // <-- ADDED: Strictly tracks if an H1 exists
 }
 
 // ExtractedLink stores information about the links found in documents
@@ -42,13 +43,27 @@ func main() {
 		Index: make(map[string]*DocumentInfo),
 	}
 
+	prepareProvider := true
 	capabilities := protocol.ServerCapabilities{
-		TextDocumentSync:     protocol.TextDocumentSyncKindFull, // Enforce full text sync
-		DefinitionProvider:   true,                              // Tell Neovim we support "Go to Definition"
-		ReferencesProvider:   true,                              // Tell Neovim we support "Find References"
-		FoldingRangeProvider: true,                              // Tell Neovim we handle code folding
+		TextDocumentSync:     protocol.TextDocumentSyncKindFull,
+		DefinitionProvider:   true,
+		ReferencesProvider:   true,
+		FoldingRangeProvider: true,
 		CompletionProvider: &protocol.CompletionOptions{
-			TriggerCharacters: []string{"["}, // Automatically trigger completion on '['
+			TriggerCharacters: []string{"["},
+		},
+		RenameProvider: &protocol.RenameOptions{
+			PrepareProvider: &prepareProvider,
+		},
+		Workspace: &protocol.ServerCapabilitiesWorkspace{
+			FileOperations: &protocol.ServerCapabilitiesWorkspaceFileOperations{
+				WillRename: &protocol.FileOperationRegistrationOptions{
+					Filters: []protocol.FileOperationFilter{
+						{Pattern: protocol.FileOperationPattern{Glob: "**/*.md"}},
+						{Pattern: protocol.FileOperationPattern{Glob: "**/*.markdown"}},
+					},
+				},
+			},
 		},
 	}
 
@@ -307,6 +322,7 @@ func main() {
 		},
 
 		// Triggered by Neovim whenever you demand auto-completions
+
 		TextDocumentCompletion: func(context *glsp.Context, params *protocol.CompletionParams) (any, error) {
 			state.Mu.RLock()
 			defer state.Mu.RUnlock()
@@ -339,6 +355,230 @@ func main() {
 			}
 
 			return items, nil
+		},
+
+		// Triggered automatically when you rename a file in your file explorer
+		// Triggered automatically when you rename a file in your file explorer
+		WorkspaceWillRenameFiles: func(context *glsp.Context, params *protocol.RenameFilesParams) (*protocol.WorkspaceEdit, error) { // <-- CHANGED 'any' to '*protocol.WorkspaceEdit'
+			state.Mu.RLock()
+			defer state.Mu.RUnlock()
+
+			changes := make(map[string][]protocol.TextEdit)
+
+			for _, fileRename := range params.Files {
+				oldAbs := strings.TrimPrefix(fileRename.OldURI, "file://")
+				newAbs := strings.TrimPrefix(fileRename.NewURI, "file://")
+
+				oldRel, err1 := filepath.Rel(state.WorkspaceRoot, oldAbs)
+				newRel, err2 := filepath.Rel(state.WorkspaceRoot, newAbs)
+
+				if err1 != nil || err2 != nil {
+					continue // Failsafe if paths escape the workspace
+				}
+
+				oldRel = filepath.ToSlash(oldRel)
+				newRel = filepath.ToSlash(newRel)
+
+				// Sweep the index to find broken links and patch them
+				for uri, docInfo := range state.Index {
+					var edits []protocol.TextEdit
+					lines := strings.Split(string(docInfo.Content), "\n")
+
+					for _, link := range docInfo.Links {
+						if filepath.Clean(link.Path) == filepath.Clean(oldRel) {
+							lineIdx := link.Range.Start.Line
+							if int(lineIdx) < len(lines) {
+								oldLineText := lines[lineIdx]
+								newLineText := strings.Replace(oldLineText, "("+link.Path+")", "("+newRel+")", 1)
+
+								if oldLineText != newLineText {
+									edits = append(edits, protocol.TextEdit{
+										Range: protocol.Range{
+											Start: protocol.Position{Line: lineIdx, Character: 0},
+											End:   protocol.Position{Line: lineIdx, Character: uint32(len(oldLineText))},
+										},
+										NewText: newLineText,
+									})
+								}
+							}
+						}
+					}
+
+					if len(edits) > 0 {
+						changes[uri] = append(changes[uri], edits...)
+					}
+				}
+			}
+
+			// <-- CHANGED: Returning a pointer (&) to the struct
+			return &protocol.WorkspaceEdit{
+				Changes: changes,
+			}, nil
+		},
+
+		// Triggered when you press your rename shortcut on a markdown link
+		TextDocumentRename: func(context *glsp.Context, params *protocol.RenameParams) (*protocol.WorkspaceEdit, error) { // <-- CHANGED 'any' to '*protocol.WorkspaceEdit'
+			state.Mu.RLock()
+			defer state.Mu.RUnlock()
+
+			uri := params.TextDocument.URI
+			cursorLine := params.Position.Line
+
+			docInfo, exists := state.Index[uri]
+			if !exists {
+				return nil, nil
+			}
+
+			// Figure out which link we are trying to rename
+			var targetLink *ExtractedLink
+			for _, link := range docInfo.Links {
+				if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
+					targetLink = &link
+					break
+				}
+			}
+
+			if targetLink == nil {
+				return nil, nil // Not on a link, ignore
+			}
+
+			oldRelPath := filepath.Clean(targetLink.Path)
+			newRelPath := filepath.ToSlash(filepath.Clean(params.NewName))
+
+			// Ensure the new name retains a markdown extension
+			if !strings.HasSuffix(newRelPath, ".md") && !strings.HasSuffix(newRelPath, ".markdown") {
+				newRelPath += ".md"
+			}
+
+			oldAbsPath := filepath.Join(state.WorkspaceRoot, oldRelPath)
+			newAbsPath := filepath.Join(state.WorkspaceRoot, newRelPath)
+
+			var docChanges []any
+
+			// 1. Find all documents that link to the old path and queue up text edits
+			for indexUri, indexDoc := range state.Index {
+				var edits []any
+				lines := strings.Split(string(indexDoc.Content), "\n")
+
+				for _, link := range indexDoc.Links {
+					if filepath.Clean(link.Path) == oldRelPath {
+						lineIdx := link.Range.Start.Line
+						if int(lineIdx) < len(lines) {
+							oldLineText := lines[lineIdx]
+							// Strictly replace the path within the parentheses to avoid false positives
+							newLineText := strings.Replace(oldLineText, "("+link.Path+")", "("+newRelPath+")", 1)
+
+							if oldLineText != newLineText {
+								edits = append(edits, protocol.TextEdit{
+									Range: protocol.Range{
+										Start: protocol.Position{Line: lineIdx, Character: 0},
+										End:   protocol.Position{Line: lineIdx, Character: uint32(len(oldLineText))},
+									},
+									NewText: newLineText,
+								})
+							}
+						}
+					}
+				}
+
+				if len(edits) > 0 {
+					docChanges = append(docChanges, protocol.TextDocumentEdit{
+						TextDocument: protocol.OptionalVersionedTextDocumentIdentifier{
+							TextDocumentIdentifier: protocol.TextDocumentIdentifier{URI: indexUri},
+						},
+						Edits: edits,
+					})
+				}
+			}
+
+			// 2. Queue the physical file rename operation
+			renameOp := protocol.RenameFile{
+				Kind:   "rename",
+				OldURI: "file://" + oldAbsPath,
+				NewURI: "file://" + newAbsPath,
+			}
+			docChanges = append(docChanges, renameOp)
+
+			// Ship the combined edits + file move back to Neovim to execute
+			return &protocol.WorkspaceEdit{ // <-- CHANGED: Added pointer (&)
+				DocumentChanges: docChanges,
+			}, nil
+		},
+
+		// Triggered BEFORE the rename prompt appears to determine exactly what text to pre-fill
+		TextDocumentPrepareRename: func(context *glsp.Context, params *protocol.PrepareRenameParams) (any, error) {
+			state.Mu.RLock()
+			defer state.Mu.RUnlock()
+
+			uri := params.TextDocument.URI
+			cursorLine := params.Position.Line
+
+			docInfo, exists := state.Index[uri]
+			if !exists {
+				return nil, nil
+			}
+
+			// 1. Find the link under the cursor
+			var targetLink *ExtractedLink
+			for _, link := range docInfo.Links {
+				if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
+					targetLink = &link
+					break
+				}
+			}
+
+			if targetLink == nil {
+				return nil, nil // Not on a link, cancel the rename action entirely
+			}
+
+			// 2. Find the exact character columns of the path inside the line text
+			lines := strings.Split(string(docInfo.Content), "\n")
+			lineIdx := targetLink.Range.Start.Line
+
+			if int(lineIdx) < len(lines) {
+				lineText := lines[lineIdx]
+
+				// Search for the exact string, e.g., "(docs/test.md)"
+				searchStr := "(" + targetLink.Path + ")"
+				idx := strings.Index(lineText, searchStr)
+
+				if idx != -1 {
+					// We found it! Calculate the exact start and end columns
+					startChar := uint32(idx + 1) // +1 to skip the opening parenthesis '('
+					endChar := startChar + uint32(len(targetLink.Path))
+
+					exactRange := protocol.Range{
+						Start: protocol.Position{Line: lineIdx, Character: startChar},
+						End:   protocol.Position{Line: lineIdx, Character: endChar},
+					}
+
+					// THE FIX: Return a map containing both the range AND the explicit placeholder
+					return map[string]any{
+						"range":       exactRange,
+						"placeholder": targetLink.Path, // Forces "docs/test.md" into the prompt
+					}, nil
+				}
+			}
+
+			// Fallback (if exact text wasn't found, still enforce the placeholder)
+			return map[string]any{
+				"range":       targetLink.Range,
+				"placeholder": targetLink.Path,
+			}, nil
+		},
+
+		// Triggered when you save a file in Neovim (:w)
+		TextDocumentDidSave: func(context *glsp.Context, params *protocol.DidSaveTextDocumentParams) error {
+			// State is already updated via DidChange.
+			// Return nil to acknowledge the save and silence the JSON-RPC error.
+			return nil
+		},
+
+		// Triggered when you close a buffer in Neovim
+		TextDocumentDidClose: func(context *glsp.Context, params *protocol.DidCloseTextDocumentParams) error {
+			// You could remove the file from the index here to save memory,
+			// but for a workspace-aware wiki, it is usually better to keep it cached!
+			return nil
 		},
 	}
 
@@ -385,6 +625,7 @@ func (s *ServerState) CrawlWorkspace() error {
 
 // ParseAndIndexContent parses raw byte arrays directly without crashing on inline nodes
 func (s *ServerState) ParseAndIndexContent(uri string, content []byte) error {
+	// 1. THIS is the part that went missing!
 	md := goldmark.New()
 	reader := text.NewReader(content)
 	doc := md.Parser().Parse(reader)
@@ -408,8 +649,10 @@ func (s *ServerState) ParseAndIndexContent(uri string, content []byte) error {
 
 	var extractedLinks []ExtractedLink
 	var docTitle string
+	var hasH1 bool // <-- The flag we added for autocomplete filtering
 
 	ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
+		// Extract links
 		if entering && n.Kind() == ast.KindLink {
 			ln := n.(*ast.Link)
 			destPath := string(ln.Destination)
@@ -449,13 +692,14 @@ func (s *ServerState) ParseAndIndexContent(uri string, content []byte) error {
 					headingText.Write(content[line.Start:line.Stop])
 				}
 				docTitle = strings.TrimSpace(headingText.String())
+				hasH1 = true // <-- Record that a real header exists
 			}
 		}
 
 		return ast.WalkContinue, nil
 	})
 
-	// FIX: Moved assignment outside loop & changed undefined 'docDoc' back to 'doc'
+	// Fallback title for files without an H1
 	if docTitle == "" {
 		docTitle = filepath.Base(strings.TrimPrefix(uri, "file://"))
 	}
@@ -466,6 +710,7 @@ func (s *ServerState) ParseAndIndexContent(uri string, content []byte) error {
 		AST:     doc,
 		Links:   extractedLinks,
 		Title:   docTitle,
+		HasH1:   hasH1,
 	}
 
 	return nil
