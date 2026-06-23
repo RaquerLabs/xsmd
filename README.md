@@ -44,24 +44,31 @@ The server communicates with Neovim using standard input/output (`stdin`/`stdout
 ## Documentation
 
 To learn more about the code structure and logic of the LSP server, check out these guides:
-*   [Architecture Guide](docs/architecture.md) — Visual dependencies, modules map, and thread-safety concurrency locks.
-*   [Execution Flows](docs/flows.md) — Boot-time crawl indexing loops, real-time diagnostics triggers, and character coordinate parsing.
-*   [Development & Contributing](docs/development.md) — Compiling locally, formatting files, running tests, and git contributions.
+
+- [Architecture Guide](docs/architecture.md) — Visual dependencies, modules map, and thread-safety concurrency locks.
+- [Execution Flows](docs/flows.md) — Boot-time crawl indexing loops, real-time diagnostics triggers, and character coordinate parsing.
+- [Development & Contributing](docs/development.md) — Compiling locally, formatting files, running tests, and git contributions.
 
 ---
 
 ## Developer Quick Start
 
 ### 1. Build and Run
+
 Compile the server binary locally:
+
 ```bash
 go build -o gcgb-md ./cmd/gcgb-md-lsp
 ```
+
 Launch the compiled binary directly (it will listen on standard inputs/outputs):
+
 ```bash
 ./gcgb-md
 ```
+
 To install it globally to your path (`~/go/bin/gcgb-md`) so Neovim can launch it:
+
 ```bash
 go build -o ~/go/bin/gcgb-md ./cmd/gcgb-md-lsp
 # Or if using mise:
@@ -69,7 +76,9 @@ mise run install
 ```
 
 ### 2. Run Tests
+
 Execute the complete test suite (includes diagnostics, folding, renames, completions, definitions, and references):
+
 ```bash
 go test -v ./...
 # Or if using mise:
@@ -77,6 +86,7 @@ mise run test
 ```
 
 ### 3. How to Contribute
+
 1. Fork the repo and make your adjustments in the Go code.
 2. Format your files using `go fmt ./...` and `goimports` (or `mise run format`).
 3. Assert that all unit tests pass with `go test ./...` (or `mise run test`).
