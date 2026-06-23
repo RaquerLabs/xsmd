@@ -2,8 +2,6 @@
 
 This document details the step-by-step transaction sequences of the server during boot and runtime editing.
 
----
-
 ## 1. Booting & Crawling the Workspace
 
 When Neovim launches and initializes the client connection, the server discovers the vault root and indexes Markdown content asynchronously:
@@ -21,15 +19,13 @@ sequenceDiagram
     Main->>State: Create empty index & root lookup
     Main->>Crawler: Start asynchronous crawl
     Main-->>Editor: Response: initialize (Success)
-    
+
     loop Crawling files
         Crawler->>Parser: ParseMarkdown(file)
         Parser-->>Crawler: Return AST, Title, and Links
         Crawler->>State: Store document details
     end
 ```
-
----
 
 ## 2. Real-Time Diagnostics (Link Validation)
 
@@ -56,8 +52,6 @@ sequenceDiagram
     Server->>Editor: Notification: publishDiagnostics (Error on exact columns)
     Editor->>User: Highlight the broken link range in red
 ```
-
----
 
 ## 3. Precise Link Character Positioning
 

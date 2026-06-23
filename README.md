@@ -39,7 +39,6 @@ The server communicates with Neovim using standard input/output (`stdin`/`stdout
                                 └──────────────┘              └──────────────┘
 ```
 
----
 
 ## Documentation
 
@@ -49,7 +48,6 @@ To learn more about the code structure and logic of the LSP server, check out th
 - [Execution Flows](docs/flows.md) — Boot-time crawl indexing loops, real-time diagnostics triggers, and character coordinate parsing.
 - [Development & Contributing](docs/development.md) — Compiling locally, formatting files, running tests, and git contributions.
 
----
 
 ## Developer Quick Start
 
