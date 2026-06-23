@@ -42,6 +42,7 @@ func ParseMarkdown(uri string, content []byte) (ast.Node, []ExtractedLink, strin
 	var extractedLinks []ExtractedLink
 	var docTitle string
 	var hasH1 bool
+	searchFrom := 0
 
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		// Extract links
@@ -49,27 +50,51 @@ func ParseMarkdown(uri string, content []byte) (ast.Node, []ExtractedLink, strin
 			ln := n.(*ast.Link)
 			destPath := string(ln.Destination)
 
-			parent := n.Parent()
-			for parent != nil && parent.Type() == ast.TypeInline {
-				parent = parent.Parent()
+			var startLine, endLine uint32
+			var startChar, endChar uint32
+
+			pattern := "](" + destPath + ")"
+			idx := -1
+			if searchFrom < len(content) {
+				idx = strings.Index(string(content[searchFrom:]), pattern)
 			}
 
-			var startLine uint32 = 0
-			var endLine uint32 = 0
+			if idx != -1 {
+				absPatternStart := searchFrom + idx
+				endByte := absPatternStart + len(pattern)
 
-			if parent != nil && parent.Lines().Len() > 0 {
-				firstSegment := parent.Lines().At(0)
-				lastSegment := parent.Lines().At(parent.Lines().Len() - 1)
+				startByte := absPatternStart
+				for startByte > searchFrom && content[startByte] != '[' {
+					startByte--
+				}
 
-				startLine = getLineFromOffset(firstSegment.Start)
-				endLine = getLineFromOffset(lastSegment.Stop)
+				startLine = getLineFromOffset(startByte)
+				endLine = getLineFromOffset(endByte)
+				startChar = uint32(startByte - lineOffsets[startLine])
+				endChar = uint32(endByte - lineOffsets[endLine])
+
+				searchFrom = endByte
+			} else {
+				// Fallback to parent block line range
+				parent := n.Parent()
+				for parent != nil && parent.Type() == ast.TypeInline {
+					parent = parent.Parent()
+				}
+				if parent != nil && parent.Lines().Len() > 0 {
+					first := parent.Lines().At(0)
+					last := parent.Lines().At(parent.Lines().Len() - 1)
+					startLine = getLineFromOffset(first.Start)
+					endLine = getLineFromOffset(last.Stop)
+				}
+				startChar = 0
+				endChar = 999
 			}
 
 			extractedLinks = append(extractedLinks, ExtractedLink{
 				Path: destPath,
 				Range: protocol.Range{
-					Start: protocol.Position{Line: startLine, Character: 0},
-					End:   protocol.Position{Line: endLine, Character: 999},
+					Start: protocol.Position{Line: startLine, Character: startChar},
+					End:   protocol.Position{Line: endLine, Character: endChar},
 				},
 			})
 		}

@@ -74,23 +74,33 @@ func BuildHandler(sState *state.ServerState) protocol.Handler {
 
 		// Triggered when you open a file in Neovim
 		TextDocumentDidOpen: func(context *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
-			sState.Mu.Lock()
-			defer sState.Mu.Unlock()
-
 			uri := params.TextDocument.URI
-			return sState.ParseAndIndexContent(uri, []byte(params.TextDocument.Text))
+
+			sState.Mu.Lock()
+			err := sState.ParseAndIndexContent(uri, []byte(params.TextDocument.Text))
+			sState.Mu.Unlock()
+
+			if err == nil {
+				PublishDiagnostics(sState, context, uri)
+			}
+			return err
 		},
 
 		// Triggered on every keystroke/modification in Neovim
 		TextDocumentDidChange: func(context *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
-			sState.Mu.Lock()
-			defer sState.Mu.Unlock()
-
 			uri := params.TextDocument.URI
 
 			if len(params.ContentChanges) > 0 {
 				change := params.ContentChanges[0].(protocol.TextDocumentContentChangeEventWhole)
-				return sState.ParseAndIndexContent(uri, []byte(change.Text))
+
+				sState.Mu.Lock()
+				err := sState.ParseAndIndexContent(uri, []byte(change.Text))
+				sState.Mu.Unlock()
+
+				if err == nil {
+					PublishDiagnostics(sState, context, uri)
+				}
+				return err
 			}
 			return nil
 		},

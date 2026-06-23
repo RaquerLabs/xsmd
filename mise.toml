@@ -27,4 +27,3 @@ run = "go test -v ./..."
 [tasks.clean]
 description = "Clean build artifacts"
 run = "rm -f gcgb-md && rm -rf dist/"
-

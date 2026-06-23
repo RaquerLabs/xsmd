@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 	"github.com/yourusername/gcgb-md/internal/state"
 )
@@ -308,5 +309,56 @@ Some other content under heading 2.
 
 	if len(res) < 2 {
 		t.Fatalf("expected folding ranges, got %d", len(res))
+	}
+}
+
+func TestPublishDiagnostics(t *testing.T) {
+	s := setupTestState()
+
+	// Create a document with broken and working links.
+	// file2.md exists in our test state.
+	// missing.md does not exist.
+	_ = s.ParseAndIndexContent("file:///workspace/doc_diag.md", []byte(`# Document With Diagnostics
+
+Working link: [File Two](file2.md)
+Broken link: [Missing Note](missing.md)
+External link: [Google](https://google.com)
+Anchor link: [Section](#section)
+`))
+
+	var notifiedMethod string
+	var notifiedParams *protocol.PublishDiagnosticsParams
+
+	ctx := &glsp.Context{
+		Notify: func(method string, params any) {
+			notifiedMethod = method
+			if p, ok := params.(*protocol.PublishDiagnosticsParams); ok {
+				notifiedParams = p
+			}
+		},
+	}
+
+	PublishDiagnostics(s, ctx, "file:///workspace/doc_diag.md")
+
+	if notifiedMethod != "textDocument/publishDiagnostics" {
+		t.Fatalf("expected notified method 'textDocument/publishDiagnostics', got '%s'", notifiedMethod)
+	}
+
+	if notifiedParams == nil {
+		t.Fatal("expected non-nil notified params")
+	}
+
+	if notifiedParams.URI != "file:///workspace/doc_diag.md" {
+		t.Errorf("expected URI 'file:///workspace/doc_diag.md', got '%s'", notifiedParams.URI)
+	}
+
+	// Only 1 broken link ("missing.md") should produce a diagnostic
+	if len(notifiedParams.Diagnostics) != 1 {
+		t.Fatalf("expected exactly 1 diagnostic, got %d", len(notifiedParams.Diagnostics))
+	}
+
+	diag := notifiedParams.Diagnostics[0]
+	if !strings.Contains(diag.Message, "Broken link") {
+		t.Errorf("expected diagnostic message to mention 'Broken link', got '%s'", diag.Message)
 	}
 }
