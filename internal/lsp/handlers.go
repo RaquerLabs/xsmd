@@ -13,7 +13,7 @@ import (
 )
 
 // BuildHandler constructs the full LSP handler set mapped to the ServerState
-func BuildHandler(sState *state.ServerState) protocol.Handler {
+func BuildHandler(sState *state.ServerState) *protocol.Handler {
 	prepareProvider := true
 	capabilities := protocol.ServerCapabilities{
 		TextDocumentSync:     protocol.TextDocumentSyncKindFull,
@@ -331,5 +331,5 @@ func BuildHandler(sState *state.ServerState) protocol.Handler {
 		},
 	}
 
-	return handler
+	return &handler
 }

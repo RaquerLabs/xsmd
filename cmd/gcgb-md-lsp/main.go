@@ -12,6 +12,6 @@ func main() {
 	sState := state.NewServerState()
 	handler := lsp.BuildHandler(sState)
 
-	s := server.NewServer(&handler, "gcgb-md-lsp", false)
+	s := server.NewServer(handler, "gcgb-md-lsp", false)
 	log.Fatal(s.RunStdio())
 }
