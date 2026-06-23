@@ -150,12 +150,13 @@ func main() {
 					}
 				}
 
-				// --- 2. FIXED: NATIVELY FOLD LISTS AND LIST ITEMS ---
-				// Apply the logic to both the overall List and individual ListItems
-				if n.Kind() == ast.KindList || n.Kind() == ast.KindListItem {
+				// --- 2. FIXED: ONLY FOLD LIST ITEMS ---
+				// By ignoring the overall list container, we prevent parent folds
+				// from swallowing sibling bullets (like "Tasks for tomorrow").
+				if n.Kind() == ast.KindListItem {
 					var startByte, stopByte int = -1, -1
 
-					// Walk the node's descendants specifically to find the true text boundaries
+					// Walk the list item's descendants to find the true text boundaries
 					ast.Walk(n, func(child ast.Node, childEntering bool) (ast.WalkStatus, error) {
 						// Guardrail: Ensure the node is a Block type before calling .Lines()
 						if child.Type() == ast.TypeBlock && child.Lines().Len() > 0 {
@@ -176,7 +177,7 @@ func main() {
 						firstLine := getLineFromOffset(startByte)
 						lastLine := getLineFromOffset(stopByte)
 
-						// Only fold if the list or item actually spans multiple lines
+						// Only fold if the list item actually has nested children (spans multiple lines)
 						if lastLine > firstLine {
 							foldingKind := string(protocol.FoldingRangeKindRegion)
 							folds = append(folds, protocol.FoldingRange{
@@ -187,6 +188,7 @@ func main() {
 						}
 					}
 				}
+
 				return ast.WalkContinue, nil
 			})
 
