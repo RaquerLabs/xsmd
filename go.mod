@@ -1,4 +1,4 @@
-module github.com/yourusername/gcgb-md
+module github.com/RaquerLabs/xsmd
 
 go 1.24.2
 

@@ -1,13 +1,13 @@
-# gcgb-md-lsp
+# Extra Small Markdown LSP (xs-md)
 
-A lightning-fast, workspace-aware Language Server Protocol (LSP) server designed specifically for Markdown documentation vaults and personal wikis, written natively in Go.
+A small LSP server for Markdown for note-taking.
 
 It balances speed and low memory usage, integrating directly with Neovim's modern built-in LSP client to provide seamless cross-note navigation and structural tools.
 
 ## Features Implemented
 
 - **Workspace Crawling:**
-  Scans your entire vault concurrently on boot, locating the project root via the anchor file `gcgb-md.toml`.
+  Scans your vault on boot, locating the project root via the anchor file `xsmd.toml`.
 - **Go to Definition (`gd`):**
   Jumps instantly to the resolved absolute path of the target Markdown file under your cursor:
   - Links starting with `/` (e.g., `[Link](/docs/file.md)`) are resolved relative to the workspace root.
@@ -41,7 +41,6 @@ The server communicates with Neovim using standard input/output (`stdin`/`stdout
                                 └──────────────┘              └──────────────┘
 ```
 
-
 ## Documentation
 
 To learn more about the code structure and logic of the LSP server, check out these guides:
@@ -50,44 +49,39 @@ To learn more about the code structure and logic of the LSP server, check out th
 - [Execution Flows](docs/flows.md) — Boot-time crawl indexing loops, real-time diagnostics triggers, and character coordinate parsing.
 - [Development & Contributing](docs/development.md) — Compiling locally, formatting files, running tests, and git contributions.
 
-
 ## Developer Quick Start
 
 ### 1. Build and Run
 
-Compile the server binary locally:
+Compile:
 
 ```bash
-go build -o gcgb-md ./cmd/gcgb-md-lsp
+mise run build
 ```
 
-Launch the compiled binary directly (it will listen on standard inputs/outputs):
+Launch:
 
 ```bash
-./gcgb-md
+./dist/xsmd
 ```
 
-To install it globally to your path (`~/go/bin/gcgb-md`) so Neovim can launch it:
+To install it globally to your path (`~/go/bin/xsmd`) so Neovim can launch it:
 
 ```bash
-go build -o ~/go/bin/gcgb-md ./cmd/gcgb-md-lsp
-# Or if using mise:
 mise run install
 ```
 
 ### 2. Run Tests
 
-Execute the complete test suite (includes diagnostics, folding, renames, completions, definitions, and references):
+Execute the complete test suite:
 
 ```bash
-go test -v ./...
-# Or if using mise:
 mise run test
 ```
 
 ### 3. How to Contribute
 
 1. Fork the repo and make your adjustments in the Go code.
-2. Format your files using `go fmt ./...` and `goimports` (or `mise run format`).
-3. Assert that all unit tests pass with `go test ./...` (or `mise run test`).
-4. Submit a Pull Request describing your changes.
+2. Format your files using `mise run format`.
+3. Assert that all unit tests pass with `mise run test`.
+4. Send a PR

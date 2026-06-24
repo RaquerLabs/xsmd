@@ -11,7 +11,7 @@ import (
 func FindProjectRoot(startPath string) (string, error) {
 	current := filepath.Clean(startPath)
 	for {
-		markerPath := filepath.Join(current, "gcgb-md.toml")
+		markerPath := filepath.Join(current, "xsmd.toml")
 		if _, err := os.Stat(markerPath); err == nil {
 			return current, nil
 		}

@@ -8,7 +8,7 @@ import (
 
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/yourusername/gcgb-md/internal/state"
+	"github.com/RaquerLabs/xsmd/internal/state"
 )
 
 // PublishDiagnostics checks for broken links in the document and publishes diagnostics to the client
@@ -73,7 +73,7 @@ func PublishDiagnostics(sState *state.ServerState, context *glsp.Context, uri st
 
 		if !existsInIndex && !existsOnDisk {
 			severity := protocol.DiagnosticSeverityError
-			source := "gcgb-md-lsp"
+			source := "xsmd-lsp"
 			message := "Broken link: file does not exist"
 
 			diagnostics = append(diagnostics, protocol.Diagnostic{

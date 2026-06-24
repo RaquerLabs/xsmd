@@ -6,7 +6,7 @@ import (
 
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/yourusername/gcgb-md/internal/state"
+	"github.com/RaquerLabs/xsmd/internal/state"
 )
 
 func setupTestState() *state.ServerState {

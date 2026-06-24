@@ -6,8 +6,8 @@ import (
 
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/yourusername/gcgb-md/internal/parser"
-	"github.com/yourusername/gcgb-md/internal/state"
+	"github.com/RaquerLabs/xsmd/internal/parser"
+	"github.com/RaquerLabs/xsmd/internal/state"
 )
 
 // HandleWorkspaceWillRenameFiles resolves files that are about to be renamed on disk and fixes broken links

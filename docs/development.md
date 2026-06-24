@@ -1,6 +1,6 @@
 # Development & Contributing Guide
 
-This document describes how to set up, build, test, and contribute to the `gcgb-md-lsp` codebase.
+This document describes how to set up, build, test, and contribute to the `xsmd-lsp` codebase.
 
 ## Getting Started
 
@@ -49,18 +49,14 @@ Compiles the executable locally:
 
 ```bash
 mise run build
-# Or manually:
-# go build -o gcgb-md ./cmd/gcgb-md-lsp
 ```
 
 ### 5. Install Globally
 
-Compiles and moves the binary to `~/go/bin/gcgb-md`, making it immediately accessible to Neovim configurations in your path:
+Compiles and moves the binary to `~/go/bin/`.
 
 ```bash
 mise run install
-# Or manually:
-# go build -o ~/go/bin/gcgb-md ./cmd/gcgb-md-lsp
 ```
 
 ### 6. Clean Up
@@ -69,8 +65,6 @@ Deletes compiled local binaries and release distribution directories:
 
 ```bash
 mise run clean
-# Or manually:
-# rm -f gcgb-md && rm -rf dist/
 ```
 
 ## Contributing Workflow

@@ -4,7 +4,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/yourusername/gcgb-md/internal/parser"
+	"github.com/RaquerLabs/xsmd/internal/parser"
 	"github.com/yuin/goldmark/ast"
 )
 

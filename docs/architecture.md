@@ -1,6 +1,6 @@
 # LSP Architecture
 
-This document describes the high-level system structure and file organization of the `gcgb-md-lsp` server.
+This document describes the high-level system structure and file organization of the `xsmd-lsp` server.
 
 ## What is an LSP Server?
 
@@ -12,7 +12,7 @@ The system is split into three main packages to isolate components:
 
 ```mermaid
 graph TD
-    Client[Neovim Editor] <-->|JSON-RPC via Stdin/Stdout| Main[cmd/gcgb-md-lsp/main.go]
+    Client[Neovim Editor] <-->|JSON-RPC via Stdin/Stdout| Main[cmd/xsmd-lsp/main.go]
     Main -->|Initializes State| State[internal/state/store.go]
     Main -->|Registers Handlers| LSP[internal/lsp/handlers.go]
 
@@ -27,12 +27,12 @@ graph TD
 
 ### Module Descriptions
 
-- **[main.go](cmd/gcgb-md-lsp/main.go)**: The entry point. Creates the server instance, registers handlers, and starts JSON-RPC standard input/output listeners.
-- **[internal/state/store.go](internal/state/store.go)**: The in-memory cache/store (`ServerState` and `DocumentInfo`). Houses cached Markdown files, link ranges, and titles.
-- **[internal/state/crawler.go](internal/state/crawler.go)**: Anchors project roots by finding `gcgb-md.toml` and climbs the directory tree finding files.
-- **[internal/parser/markdown.go](internal/parser/markdown.go)**: Converts raw Markdown text into an Abstract Syntax Tree (AST), extracting titles and character spans of notes.
-- **[internal/lsp/handlers.go](internal/lsp/handlers.go)**: The central router. Configures LSP server capabilities (folding, definition, backreferences, autocompletions).
-- **[internal/lsp/diagnostics.go](internal/lsp/diagnostics.go)**: Validates target paths against cache tables and the filesystem, generating highlights for broken links.
+- **[main.go](/cmd/xsmd-lsp/main.go)**: The entry point. Creates the server instance, registers handlers, and starts JSON-RPC standard input/output listeners.
+- **[internal/state/store.go](/internal/state/store.go)**: The in-memory cache/store (`ServerState` and `DocumentInfo`). Houses cached Markdown files, link ranges, and titles.
+- **[internal/state/crawler.go](/internal/state/crawler.go)**: Anchors project roots by finding `xsmd.toml` and climbs the directory tree finding files.
+- **[internal/parser/markdown.go](/internal/parser/markdown.go)**: Converts raw Markdown text into an Abstract Syntax Tree (AST), extracting titles and character spans of notes.
+- **[internal/lsp/handlers.go](/internal/lsp/handlers.go)**: The central router. Configures LSP server capabilities (folding, definition, backreferences, autocompletions).
+- **[internal/lsp/diagnostics.go](/internal/lsp/diagnostics.go)**: Validates target paths against cache tables and the filesystem, generating highlights for broken links.
 
 ## Mutexes & Concurrency Safety
 
