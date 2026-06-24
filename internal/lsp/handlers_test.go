@@ -146,6 +146,171 @@ func TestTextDocumentCompletion(t *testing.T) {
 	}
 }
 
+func TestTextDocumentCompletionWithPosition(t *testing.T) {
+	s := setupTestState()
+	handler := BuildHandler(s)
+
+	// Add a new file that has a half-completed link:
+	// Line 0: Click [Fi
+	_ = s.ParseAndIndexContent("file:///workspace/file4.md", []byte("Click [Fi"))
+
+	params := &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/file4.md",
+			},
+			Position: protocol.Position{
+				Line:      0,
+				Character: 9, // right after the 'i' in '[Fi'
+			},
+		},
+	}
+
+	res, err := handler.TextDocumentCompletion(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	items, ok := res.([]protocol.CompletionItem)
+	if !ok {
+		t.Fatalf("expected []protocol.CompletionItem, got %T", res)
+	}
+
+	// We expect 3 completion items (File One, File Two, File Three)
+	if len(items) != 3 {
+		t.Fatalf("expected 3 completion items, got %d", len(items))
+	}
+
+	foundOne := false
+	for _, item := range items {
+		if item.Label == "File One" {
+			foundOne = true
+			if item.TextEdit == nil {
+				t.Fatalf("expected TextEdit to be set")
+			}
+			te, ok := item.TextEdit.(*protocol.TextEdit)
+			if !ok {
+				t.Fatalf("expected *protocol.TextEdit, got %T", item.TextEdit)
+			}
+			// Start character should be 6 (the index of '[')
+			if te.Range.Start.Character != 6 {
+				t.Errorf("expected TextEdit start character 6, got %d", te.Range.Start.Character)
+			}
+			if te.Range.End.Character != 9 {
+				t.Errorf("expected TextEdit end character 9, got %d", te.Range.End.Character)
+			}
+			if te.NewText != "[File One](file1.md)" {
+				t.Errorf("unexpected NewText: %s", te.NewText)
+			}
+		}
+	}
+
+	if !foundOne {
+		t.Error("did not find completion item for File One")
+	}
+}
+
+func TestTextDocumentCompletionFiltering(t *testing.T) {
+	s := setupTestState()
+	handler := BuildHandler(s)
+
+	// Add a new file that has a partially typed link with a space:
+	// Line 0: Click [Two 
+	_ = s.ParseAndIndexContent("file:///workspace/file5.md", []byte("Click [Two "))
+
+	params := &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/file5.md",
+			},
+			Position: protocol.Position{
+				Line:      0,
+				Character: 11, // right after the trailing space in '[Two '
+			},
+		},
+	}
+
+	res, err := handler.TextDocumentCompletion(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	items, ok := res.([]protocol.CompletionItem)
+	if !ok {
+		t.Fatalf("expected []protocol.CompletionItem, got %T", res)
+	}
+
+	// We expect ONLY 1 completion item ("File Two") because "Two" filters out File One and File Three
+	if len(items) != 1 {
+		t.Fatalf("expected 1 completion item, got %d", len(items))
+	}
+
+	if items[0].Label != "File Two" {
+		t.Errorf("expected completion item 'File Two', got '%s'", items[0].Label)
+	}
+}
+
+func TestTextDocumentCompletionWithTrailingSpace(t *testing.T) {
+	s := setupTestState()
+	handler := BuildHandler(s)
+
+	// Add a new file that has a partially typed link followed by spaces:
+	// Line 0: Click [Two   
+	_ = s.ParseAndIndexContent("file:///workspace/file6.md", []byte("Click [Two   "))
+
+	params := &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/file6.md",
+			},
+			Position: protocol.Position{
+				Line:      0,
+				Character: 13, // right after the last space of '[Two   '
+			},
+		},
+	}
+
+	res, err := handler.TextDocumentCompletion(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	items, ok := res.([]protocol.CompletionItem)
+	if !ok {
+		t.Fatalf("expected []protocol.CompletionItem, got %T", res)
+	}
+
+	if len(items) != 1 {
+		t.Fatalf("expected 1 completion item, got %d", len(items))
+	}
+
+	item := items[0]
+	if item.Label != "File Two" {
+		t.Errorf("expected completion item 'File Two', got '%s'", item.Label)
+	}
+
+	if item.TextEdit == nil {
+		t.Fatalf("expected TextEdit to be set")
+	}
+
+	te, ok := item.TextEdit.(*protocol.TextEdit)
+	if !ok {
+		t.Fatalf("expected *protocol.TextEdit, got %T", item.TextEdit)
+	}
+
+	// Start character should be 6 (the index of '[')
+	if te.Range.Start.Character != 6 {
+		t.Errorf("expected TextEdit start character 6, got %d", te.Range.Start.Character)
+	}
+	// End character should be 10 (right after 'o', leaving the spaces alone)
+	if te.Range.End.Character != 10 {
+		t.Errorf("expected TextEdit end character 10, got %d", te.Range.End.Character)
+	}
+}
+
+
+
+
 func TestRenameLinkPrepare(t *testing.T) {
 	s := setupTestState()
 	handler := BuildHandler(s)
