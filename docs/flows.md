@@ -1,15 +1,14 @@
 # LSP Execution Flows
 
-This document details the step-by-step transaction sequences of the server during boot and runtime editing.
+## Booting
 
-## 1. Booting & Crawling the Workspace
-
-When Neovim launches and initializes the client connection, the server discovers the vault root and indexes Markdown content asynchronously:
+When the IDE initializes the client connection,
+the server finds the root and indexes Markdown content asynchronously:
 
 ```mermaid
 sequenceDiagram
     autonumber
-    participant Editor as Neovim Client
+    participant Editor as IDE
     participant Main as Main Entrypoint
     participant State as State Index
     participant Crawler as Workspace Crawler
@@ -27,15 +26,16 @@ sequenceDiagram
     end
 ```
 
-## 2. Real-Time Diagnostics (Link Validation)
+## Link Validation
 
-As you switch buffers or edit notes, the server validates links in the background:
+As you switch buffers or edit notes,
+the server validates links in the background:
 
 ```mermaid
 sequenceDiagram
     autonumber
     actor User as User Types Link
-    participant Editor as Neovim Client
+    participant Editor as IDE
     participant Server as LSP Handlers
     participant State as State Index
     participant Parser as Markdown Parser
@@ -53,24 +53,32 @@ sequenceDiagram
     Editor->>User: Highlight the broken link range in red
 ```
 
-## 3. Precise Link Character Positioning
+## Precise Link Character Positioning
 
-To prevent diagnostics or rename actions from bleeding into neighboring text, the parser calculates the **exact byte offsets** of links in the source document rather than mapping bounds to the parent line:
+The parser calculates the **exact byte offsets** of links in the source document:
 
-1. **AST Node Lookup**: Detects a link node (`ast.KindLink`) during traversal.
-2. **Sequential Search**: Matches pattern `](destination)` starting from the last matched offset.
-3. **Offset Resolution**: Scans backwards for the corresponding `[` bracket to frame the absolute start.
-4. **Column Calculation**: Computes exact start/end line coordinates and characters relative to the row's newline bytes.
+1. AST Node Lookup:
+   Detects a link node (`ast.KindLink`) during traversal.
+2. Sequential Search:
+   Matches pattern `](destination)` starting from the last matched offset.
+3. Offset Resolution:
+   Scans backwards for the corresponding `[` bracket to frame the absolute start.
+4. Column Calculation:
+   Computes exact start/end line coordinates and characters relative to the row's newline bytes.
 
-## 4. Link Resolution Strategy
+This prevents diagnostics or rename actions from bleeding into neighboring text.
 
-When resolving Markdown links across Definition lookup, References search, Diagnostics, and Renaming:
-- **Root-Relative Links** (e.g. `[Note](/docs/note.md)`):
+## Link Resolution Strategy
+
+When resolving Markdown links across Definition lookup, references search, diagnostics, and renaming:
+
+- Root-Relative Links (e.g. `[Note](/docs/note.md)`):
   - Detected when the destination path starts with `/`.
   - The leading `/` is stripped and the clean path is joined with the **Workspace Root**.
-- **Folder-Relative Links** (e.g. `[Note](../note.md)` or `[Note](sibling.md)`):
-  - Detected when the destination path does *not* start with `/`.
+- Folder-Relative Links (e.g. `[Note](../note.md)` or `[Note](sibling.md)`):
+  - Detected when the destination path does _not_ start with `/`.
   - The path is resolved relative to the parent directory of the file containing the link.
-- **Autocompletion**:
-  - Automatically inserts folder-relative paths (e.g. `../` and relative subdirectories) based on the location of the active document being edited.
-
+- Autocompletion:
+  - Automatically inserts folder-relative paths
+    (e.g. `../` and relative subdirectories)
+    based on the location of the active document being edited.
