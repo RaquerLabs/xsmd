@@ -24,6 +24,18 @@ run = "go mod tidy"
 description = "Run the unit test suite"
 run = "go test -v ./..."
 
+[tasks.test-coverage]
+run = """
+go test -v -coverprofile=cover.out ./...
+go tool cover -func=cover.out
+"""
+
+[tasks.test-coverage-html]
+run = """
+go test -v -coverprofile=cover.out ./...
+go tool cover -html=cover.out
+"""
+
 [tasks.clean]
 description = "Clean build artifacts"
 run = "rm -rf dist/"
