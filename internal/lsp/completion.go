@@ -51,7 +51,7 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 			}
 		}
 		if startChar != -1 {
-			query = strings.TrimSpace(currentLine[startChar+1 : characterPos])
+			query = currentLine[startChar+1 : characterPos]
 		}
 	}
 
@@ -61,7 +61,12 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 	}
 
 	items := []protocol.CompletionItem{}
-	queryLower := strings.ToLower(query)
+	var queryFiltered bool
+	var queryCleaned string
+	if strings.TrimSpace(query) != "" {
+		queryCleaned = strings.TrimSpace(query)
+		queryFiltered = true
+	}
 
 	for uri, docInfo := range state.Index {
 		if uri == params.TextDocument.URI {
@@ -87,12 +92,19 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 			relPathSlash = filepath.ToSlash(relPath)
 		}
 
-		// Apply server-side filtering if query is not empty
-		if queryLower != "" {
-			titleLower := strings.ToLower(docInfo.Title)
-			relPathLower := strings.ToLower(relPathSlash)
-			if !strings.Contains(titleLower, queryLower) && !strings.Contains(relPathLower, queryLower) {
-				continue
+		// Apply fuzzy filtering if a query is present
+		if queryFiltered {
+			basename := filepath.Base(relPathSlash)
+			if strings.Contains(queryCleaned, "/") {
+				// If query has a slash, match against Title or full relative path
+				if !fuzzyMatch(docInfo.Title, queryCleaned) && !fuzzyMatch(relPathSlash, queryCleaned) {
+					continue
+				}
+			} else {
+				// Otherwise, match against Title or Basename only to avoid folder-prefix false positives
+				if !fuzzyMatch(docInfo.Title, queryCleaned) && !fuzzyMatch(basename, queryCleaned) {
+					continue
+				}
 			}
 		}
 
@@ -135,7 +147,30 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 	}
 
 	return protocol.CompletionList{
-		IsIncomplete: true,
+		IsIncomplete: len(items) > 0,
 		Items:        items,
 	}, nil
+}
+
+// fuzzyMatch checks if the query subsequence matches the target string case-insensitively.
+func fuzzyMatch(target, query string) bool {
+	target = strings.ToLower(target)
+	query = strings.ToLower(query)
+
+	tIdx := 0
+	for qIdx := 0; qIdx < len(query); qIdx++ {
+		qChar := query[qIdx]
+		found := false
+		for ; tIdx < len(target); tIdx++ {
+			if target[tIdx] == qChar {
+				found = true
+				tIdx++
+				break
+			}
+		}
+		if !found {
+			return false
+		}
+	}
+	return true
 }

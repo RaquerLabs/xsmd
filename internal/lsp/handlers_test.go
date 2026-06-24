@@ -320,6 +320,50 @@ func TestTextDocumentCompletionWithTrailingSpace(t *testing.T) {
 	}
 }
 
+func TestTextDocumentCompletionFuzzyDirectoryLeaking(t *testing.T) {
+	s := setupTestState()
+	handler := BuildHandler(s)
+
+	// file3.md is in /workspace/sub/file3.md.
+	// Its relative path from root or source is sub/file3.md.
+	// If we search for 'sub', it should match sub/file3.md.
+	// If we search for 'sb' (fuzzy for sub), it should match sub/file3.md only if we match full path,
+	// but since the query 'sb' has no slash, it should NOT match sub/file3.md unless 'sb' matches 'File Three' (Title) or 'file3.md' (Basename).
+	// Neither matches 'sb'. So 'sb' should yield 0 results.
+
+	_ = s.ParseAndIndexContent("file:///workspace/file7.md", []byte("Click [sb"))
+
+	params := &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/file7.md",
+			},
+			Position: protocol.Position{
+				Line:      0,
+				Character: 9, // right after 'b'
+			},
+		},
+	}
+
+	res, err := handler.TextDocumentCompletion(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	list, ok := res.(protocol.CompletionList)
+	if !ok {
+		t.Fatalf("expected protocol.CompletionList, got %T", res)
+	}
+	items := list.Items
+
+	// We expect 0 items because 'sb' matches 'sub' in the path, but 'sb' has no slash,
+	// so the path directory prefix is ignored.
+	if len(items) != 0 {
+		t.Fatalf("expected 0 completion items, got %d", len(items))
+	}
+}
+
+
 
 
 
