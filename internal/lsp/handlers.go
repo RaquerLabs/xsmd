@@ -244,8 +244,31 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 			for i := range docInfo.Links {
 				link := &docInfo.Links[i]
 				if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
-					targetLink = link
-					break
+					if link.Range.Start.Line == link.Range.End.Line {
+						if params.Position.Character >= link.Range.Start.Character && params.Position.Character <= link.Range.End.Character {
+							targetLink = link
+							break
+						}
+					} else {
+						onStartLine := cursorLine == link.Range.Start.Line
+						onEndLine := cursorLine == link.Range.End.Line
+						if (!onStartLine || params.Position.Character >= link.Range.Start.Character) &&
+							(!onEndLine || params.Position.Character <= link.Range.End.Character) {
+							targetLink = link
+							break
+						}
+					}
+				}
+			}
+
+			// Fallback to first link on the line if character matching didn't yield anything
+			if targetLink == nil {
+				for i := range docInfo.Links {
+					link := &docInfo.Links[i]
+					if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
+						targetLink = link
+						break
+					}
 				}
 			}
 
@@ -253,11 +276,17 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 				return nil, nil
 			}
 
-			cleanPath := filepath.Clean(targetLink.Path)
-			cleanPath = strings.TrimPrefix(cleanPath, string(filepath.Separator))
-			cleanPath = strings.TrimPrefix(cleanPath, "/")
-
-			targetAbsPath := filepath.Join(sState.WorkspaceRoot, cleanPath)
+			var targetAbsPath string
+			if strings.HasPrefix(targetLink.Path, "/") {
+				cleanPath := filepath.Clean(targetLink.Path)
+				cleanPath = strings.TrimPrefix(cleanPath, string(filepath.Separator))
+				cleanPath = strings.TrimPrefix(cleanPath, "/")
+				targetAbsPath = filepath.Join(sState.WorkspaceRoot, cleanPath)
+			} else {
+				sourceAbsPath := strings.TrimPrefix(uri, "file://")
+				sourceDir := filepath.Dir(sourceAbsPath)
+				targetAbsPath = filepath.Clean(filepath.Join(sourceDir, targetLink.Path))
+			}
 			targetURI := "file://" + targetAbsPath
 
 			return protocol.Location{
@@ -277,21 +306,32 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 			currentURI := params.TextDocument.URI
 
 			currentAbsPath := strings.TrimPrefix(currentURI, "file://")
-			currentRelPath, err := filepath.Rel(sState.WorkspaceRoot, currentAbsPath)
-			if err != nil {
-				return nil, nil
-			}
 
 			locations := []protocol.Location{}
 
 			for _, docInfo := range sState.Index {
 				for _, link := range docInfo.Links {
+					filePath := link.Path
+					if idx := strings.Index(filePath, "#"); idx != -1 {
+						filePath = filePath[:idx]
+					}
+					if filePath == "" {
+						continue
+					}
 
-					cleanLinkPath := filepath.Clean(link.Path)
-					cleanLinkPath = strings.TrimPrefix(cleanLinkPath, string(filepath.Separator))
-					cleanLinkPath = strings.TrimPrefix(cleanLinkPath, "/")
+					var targetAbsPath string
+					if strings.HasPrefix(filePath, "/") {
+						cleanPath := filepath.Clean(filePath)
+						cleanPath = strings.TrimPrefix(cleanPath, string(filepath.Separator))
+						cleanPath = strings.TrimPrefix(cleanPath, "/")
+						targetAbsPath = filepath.Join(sState.WorkspaceRoot, cleanPath)
+					} else {
+						sourceAbsPath := strings.TrimPrefix(docInfo.URI, "file://")
+						sourceDir := filepath.Dir(sourceAbsPath)
+						targetAbsPath = filepath.Clean(filepath.Join(sourceDir, filePath))
+					}
 
-					if cleanLinkPath == currentRelPath {
+					if filepath.Clean(targetAbsPath) == filepath.Clean(currentAbsPath) {
 						locations = append(locations, protocol.Location{
 							URI:   docInfo.URI,
 							Range: link.Range,

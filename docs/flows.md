@@ -61,3 +61,16 @@ To prevent diagnostics or rename actions from bleeding into neighboring text, th
 2. **Sequential Search**: Matches pattern `](destination)` starting from the last matched offset.
 3. **Offset Resolution**: Scans backwards for the corresponding `[` bracket to frame the absolute start.
 4. **Column Calculation**: Computes exact start/end line coordinates and characters relative to the row's newline bytes.
+
+## 4. Link Resolution Strategy
+
+When resolving Markdown links across Definition lookup, References search, Diagnostics, and Renaming:
+- **Root-Relative Links** (e.g. `[Note](/docs/note.md)`):
+  - Detected when the destination path starts with `/`.
+  - The leading `/` is stripped and the clean path is joined with the **Workspace Root**.
+- **Folder-Relative Links** (e.g. `[Note](../note.md)` or `[Note](sibling.md)`):
+  - Detected when the destination path does *not* start with `/`.
+  - The path is resolved relative to the parent directory of the file containing the link.
+- **Autocompletion**:
+  - Automatically inserts folder-relative paths (e.g. `../` and relative subdirectories) based on the location of the active document being edited.
+

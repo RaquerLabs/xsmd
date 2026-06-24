@@ -40,11 +40,17 @@ func PublishDiagnostics(sState *state.ServerState, context *glsp.Context, uri st
 			continue
 		}
 
-		cleanPath := filepath.Clean(filePath)
-		cleanPath = strings.TrimPrefix(cleanPath, string(filepath.Separator))
-		cleanPath = strings.TrimPrefix(cleanPath, "/")
-
-		targetAbsPath := filepath.Join(workspaceRoot, cleanPath)
+		var targetAbsPath string
+		if strings.HasPrefix(filePath, "/") {
+			cleanPath := filepath.Clean(filePath)
+			cleanPath = strings.TrimPrefix(cleanPath, string(filepath.Separator))
+			cleanPath = strings.TrimPrefix(cleanPath, "/")
+			targetAbsPath = filepath.Join(workspaceRoot, cleanPath)
+		} else {
+			sourceAbsPath := strings.TrimPrefix(uri, "file://")
+			sourceDir := filepath.Dir(sourceAbsPath)
+			targetAbsPath = filepath.Clean(filepath.Join(sourceDir, filePath))
+		}
 		targetURI := "file://" + targetAbsPath
 
 		// First, check in-memory cache
