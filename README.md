@@ -2,6 +2,20 @@
 
 Another LSP server for Markdown note-taking.
 
+## Installation
+
+If you're on MacOS or Linux:
+
+```sh
+curl -sSfL https://raw.githubusercontent.com/RaquerLabs/xsmd/main/install.sh | sh
+```
+
+If you're on windows:
+
+```powershell
+iwr https://raw.githubusercontent.com/RaquerLabs/xsmd/main/install.ps1 | iex
+```
+
 ## Features Implemented
 
 - Workspace Crawling:
