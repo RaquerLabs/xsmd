@@ -581,8 +581,8 @@ Root broken: [Missing](/missing.md)
 	for _, item := range items {
 		if item.Label == "File One" {
 			foundComp1 = true
-			if *item.InsertText != "File One](../file1.md)" {
-				t.Errorf("expected insert text to be relative: 'File One](../file1.md)', got '%s'", *item.InsertText)
+			if *item.InsertText != "File One](/file1.md)" {
+				t.Errorf("expected insert text to be absolute: 'File One](/file1.md)', got '%s'", *item.InsertText)
 			}
 		}
 	}
