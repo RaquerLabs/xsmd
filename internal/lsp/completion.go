@@ -29,7 +29,16 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 		if err != nil {
 			continue
 		}
-		relPath = filepath.ToSlash(relPath)
+
+		if strings.HasPrefix(relPath, "..") {
+			relToRoot, err := filepath.Rel(state.WorkspaceRoot, absPath)
+			if err != nil {
+				continue
+			}
+			relPath = "/" + filepath.ToSlash(relToRoot)
+		} else {
+			relPath = filepath.ToSlash(relPath)
+		}
 
 		// The text that actually gets inserted after the '[' you typed
 		markdownLink := fmt.Sprintf("%s](%s)", docInfo.Title, relPath)
