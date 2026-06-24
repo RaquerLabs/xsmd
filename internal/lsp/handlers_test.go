@@ -21,6 +21,7 @@ func setupTestState() *state.ServerState {
 	_ = s.ParseAndIndexContent("file:///workspace/file1.md", []byte(`# File One
 
 Check out [File Two](file2.md) or [sub/file3.md](sub/file3.md).
+[
 `))
 
 	// Add file2.md
@@ -107,6 +108,10 @@ func TestTextDocumentCompletion(t *testing.T) {
 			TextDocument: protocol.TextDocumentIdentifier{
 				URI: "file:///workspace/file1.md",
 			},
+			Position: protocol.Position{
+				Line:      3,
+				Character: 1,
+			},
 		},
 	}
 
@@ -115,10 +120,11 @@ func TestTextDocumentCompletion(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	items, ok := res.([]protocol.CompletionItem)
+	list, ok := res.(protocol.CompletionList)
 	if !ok {
-		t.Fatalf("expected []protocol.CompletionItem, got %T", res)
+		t.Fatalf("expected protocol.CompletionList, got %T", res)
 	}
+	items := list.Items
 
 	if len(items) != 2 {
 		t.Fatalf("expected 2 completion items, got %d", len(items))
@@ -171,10 +177,11 @@ func TestTextDocumentCompletionWithPosition(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	items, ok := res.([]protocol.CompletionItem)
+	list, ok := res.(protocol.CompletionList)
 	if !ok {
-		t.Fatalf("expected []protocol.CompletionItem, got %T", res)
+		t.Fatalf("expected protocol.CompletionList, got %T", res)
 	}
+	items := list.Items
 
 	// We expect 3 completion items (File One, File Two, File Three)
 	if len(items) != 3 {
@@ -192,14 +199,14 @@ func TestTextDocumentCompletionWithPosition(t *testing.T) {
 			if !ok {
 				t.Fatalf("expected *protocol.TextEdit, got %T", item.TextEdit)
 			}
-			// Start character should be 6 (the index of '[')
-			if te.Range.Start.Character != 6 {
-				t.Errorf("expected TextEdit start character 6, got %d", te.Range.Start.Character)
+			// Start character should be 7 (right after '[')
+			if te.Range.Start.Character != 7 {
+				t.Errorf("expected TextEdit start character 7, got %d", te.Range.Start.Character)
 			}
 			if te.Range.End.Character != 9 {
 				t.Errorf("expected TextEdit end character 9, got %d", te.Range.End.Character)
 			}
-			if te.NewText != "[File One](file1.md)" {
+			if te.NewText != "File One](file1.md)" {
 				t.Errorf("unexpected NewText: %s", te.NewText)
 			}
 		}
@@ -235,10 +242,11 @@ func TestTextDocumentCompletionFiltering(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	items, ok := res.([]protocol.CompletionItem)
+	list, ok := res.(protocol.CompletionList)
 	if !ok {
-		t.Fatalf("expected []protocol.CompletionItem, got %T", res)
+		t.Fatalf("expected protocol.CompletionList, got %T", res)
 	}
+	items := list.Items
 
 	// We expect ONLY 1 completion item ("File Two") because "Two" filters out File One and File Three
 	if len(items) != 1 {
@@ -275,10 +283,11 @@ func TestTextDocumentCompletionWithTrailingSpace(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	items, ok := res.([]protocol.CompletionItem)
+	list, ok := res.(protocol.CompletionList)
 	if !ok {
-		t.Fatalf("expected []protocol.CompletionItem, got %T", res)
+		t.Fatalf("expected protocol.CompletionList, got %T", res)
 	}
+	items := list.Items
 
 	if len(items) != 1 {
 		t.Fatalf("expected 1 completion item, got %d", len(items))
@@ -298,13 +307,16 @@ func TestTextDocumentCompletionWithTrailingSpace(t *testing.T) {
 		t.Fatalf("expected *protocol.TextEdit, got %T", item.TextEdit)
 	}
 
-	// Start character should be 6 (the index of '[')
-	if te.Range.Start.Character != 6 {
-		t.Errorf("expected TextEdit start character 6, got %d", te.Range.Start.Character)
+	// Start character should be 7 (right after '[')
+	if te.Range.Start.Character != 7 {
+		t.Errorf("expected TextEdit start character 7, got %d", te.Range.Start.Character)
 	}
-	// End character should be 10 (right after 'o', leaving the spaces alone)
-	if te.Range.End.Character != 10 {
-		t.Errorf("expected TextEdit end character 10, got %d", te.Range.End.Character)
+	// End character should be 13 (all the way to the cursor)
+	if te.Range.End.Character != 13 {
+		t.Errorf("expected TextEdit end character 13, got %d", te.Range.End.Character)
+	}
+	if te.NewText != "File Two](file2.md)" {
+		t.Errorf("unexpected NewText: %s", te.NewText)
 	}
 }
 
@@ -551,6 +563,7 @@ No links here.
 	_ = s.ParseAndIndexContent("file:///workspace/sub/file4.md", []byte(`# File Four
 
 Root link to [File Two](/file2.md) and relative link to [File Three](file3.md).
+[
 `))
 
 	handler := BuildHandler(s)
@@ -732,16 +745,21 @@ Root broken: [Missing](/missing.md)
 			TextDocument: protocol.TextDocumentIdentifier{
 				URI: "file:///workspace/sub/file4.md",
 			},
+			Position: protocol.Position{
+				Line:      3,
+				Character: 1,
+			},
 		},
 	}
 	resComp, err := handler.TextDocumentCompletion(nil, paramsComp)
 	if err != nil {
 		t.Fatalf("completion error: %v", err)
 	}
-	items, ok := resComp.([]protocol.CompletionItem)
+	list, ok := resComp.(protocol.CompletionList)
 	if !ok {
-		t.Fatalf("expected []protocol.CompletionItem, got %T", resComp)
+		t.Fatalf("expected protocol.CompletionList, got %T", resComp)
 	}
+	items := list.Items
 	foundComp1 := false
 	for _, item := range items {
 		if item.Label == "File One" {
