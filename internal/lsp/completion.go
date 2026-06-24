@@ -60,7 +60,7 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 		return nil, nil
 	}
 
-	var items []protocol.CompletionItem
+	items := []protocol.CompletionItem{}
 	queryLower := strings.ToLower(query)
 
 	for uri, docInfo := range state.Index {
