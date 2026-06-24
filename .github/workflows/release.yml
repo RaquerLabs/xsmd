@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 permissions:
   contents: write
@@ -26,26 +26,26 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.24.2'
+          go-version: "1.24.2"
           cache: true
 
       - name: Build binary
         run: |
-          BINARY_NAME="gcgb-md-lsp"
+          BINARY_NAME="xsmd"
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            BINARY_NAME="gcgb-md-lsp.exe"
+            BINARY_NAME="xsmd.exe"
           fi
-          
+
           # Output directory
           OUT_DIR="dist/${{ matrix.goos }}_${{ matrix.goarch }}"
           mkdir -p "$OUT_DIR"
-          
+
           # Compile
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-s -w" -o "$OUT_DIR/$BINARY_NAME" ./cmd/gcgb-md-lsp
-          
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} go build -ldflags="-s -w" -o "$OUT_DIR/$BINARY_NAME" ./cmd/xsmd-lsp
+
           # Create archive
           cd dist
-          ARCHIVE_NAME="gcgb-md-lsp-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+          ARCHIVE_NAME="xsmd-lsp-${{ github.ref_name }}-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
             zip -j "${ARCHIVE_NAME}.zip" "${{ matrix.goos }}_${{ matrix.goarch }}/$BINARY_NAME"
           else
