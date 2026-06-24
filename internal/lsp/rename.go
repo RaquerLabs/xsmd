@@ -37,11 +37,38 @@ func HandleWorkspaceWillRenameFiles(state *state.ServerState, context *glsp.Cont
 			lines := strings.Split(string(docInfo.Content), "\n")
 
 			for _, link := range docInfo.Links {
-				if filepath.Clean(link.Path) == filepath.Clean(oldRel) {
+				var targetAbsPath string
+				if strings.HasPrefix(link.Path, "/") {
+					cleanPath := filepath.Clean(link.Path)
+					cleanPath = strings.TrimPrefix(cleanPath, string(filepath.Separator))
+					cleanPath = strings.TrimPrefix(cleanPath, "/")
+					targetAbsPath = filepath.Join(state.WorkspaceRoot, cleanPath)
+				} else {
+					sourceAbsPath := strings.TrimPrefix(uri, "file://")
+					sourceDir := filepath.Dir(sourceAbsPath)
+					targetAbsPath = filepath.Clean(filepath.Join(sourceDir, link.Path))
+				}
+
+				if filepath.Clean(targetAbsPath) == filepath.Clean(oldAbs) {
 					lineIdx := link.Range.Start.Line
 					if int(lineIdx) < len(lines) {
 						oldLineText := lines[lineIdx]
-						newLineText := strings.Replace(oldLineText, "("+link.Path+")", "("+newRel+")", 1)
+
+						var newLinkPath string
+						if strings.HasPrefix(link.Path, "/") {
+							newLinkPath = "/" + newRel
+						} else {
+							sourceAbsPath := strings.TrimPrefix(uri, "file://")
+							sourceDir := filepath.Dir(sourceAbsPath)
+							relPath, err := filepath.Rel(sourceDir, newAbs)
+							if err == nil {
+								newLinkPath = filepath.ToSlash(relPath)
+							} else {
+								newLinkPath = filepath.ToSlash(newRel) // Fallback
+							}
+						}
+
+						newLineText := strings.Replace(oldLineText, "("+link.Path+")", "("+newLinkPath+")", 1)
 
 						if oldLineText != newLineText {
 							edits = append(edits, protocol.TextEdit{
@@ -85,8 +112,30 @@ func HandleTextDocumentRename(state *state.ServerState, context *glsp.Context, p
 	for i := range docInfo.Links {
 		link := &docInfo.Links[i]
 		if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
-			targetLink = link
-			break
+			if link.Range.Start.Line == link.Range.End.Line {
+				if params.Position.Character >= link.Range.Start.Character && params.Position.Character <= link.Range.End.Character {
+					targetLink = link
+					break
+				}
+			} else {
+				onStartLine := cursorLine == link.Range.Start.Line
+				onEndLine := cursorLine == link.Range.End.Line
+				if (!onStartLine || params.Position.Character >= link.Range.Start.Character) &&
+					(!onEndLine || params.Position.Character <= link.Range.End.Character) {
+					targetLink = link
+					break
+				}
+			}
+		}
+	}
+
+	if targetLink == nil {
+		for i := range docInfo.Links {
+			link := &docInfo.Links[i]
+			if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
+				targetLink = link
+				break
+			}
 		}
 	}
 
@@ -94,16 +143,32 @@ func HandleTextDocumentRename(state *state.ServerState, context *glsp.Context, p
 		return nil, nil // Not on a link, ignore
 	}
 
-	oldRelPath := filepath.Clean(targetLink.Path)
-	newRelPath := filepath.ToSlash(filepath.Clean(params.NewName))
-
-	// Ensure the new name retains a markdown extension
-	if !strings.HasSuffix(newRelPath, ".md") && !strings.HasSuffix(newRelPath, ".markdown") {
-		newRelPath += ".md"
+	var oldAbsPath string
+	if strings.HasPrefix(targetLink.Path, "/") {
+		cleanPath := filepath.Clean(targetLink.Path)
+		cleanPath = strings.TrimPrefix(cleanPath, string(filepath.Separator))
+		cleanPath = strings.TrimPrefix(cleanPath, "/")
+		oldAbsPath = filepath.Join(state.WorkspaceRoot, cleanPath)
+	} else {
+		sourceAbsPath := strings.TrimPrefix(uri, "file://")
+		sourceDir := filepath.Dir(sourceAbsPath)
+		oldAbsPath = filepath.Clean(filepath.Join(sourceDir, targetLink.Path))
 	}
 
-	oldAbsPath := filepath.Join(state.WorkspaceRoot, oldRelPath)
-	newAbsPath := filepath.Join(state.WorkspaceRoot, newRelPath)
+	newNameCleaned := filepath.Clean(params.NewName)
+	if !strings.HasSuffix(newNameCleaned, ".md") && !strings.HasSuffix(newNameCleaned, ".markdown") {
+		newNameCleaned += ".md"
+	}
+
+	var newAbsPath string
+	if strings.HasPrefix(params.NewName, "/") {
+		cleanPath := strings.TrimPrefix(newNameCleaned, string(filepath.Separator))
+		cleanPath = strings.TrimPrefix(cleanPath, "/")
+		newAbsPath = filepath.Join(state.WorkspaceRoot, cleanPath)
+	} else {
+		oldDir := filepath.Dir(oldAbsPath)
+		newAbsPath = filepath.Clean(filepath.Join(oldDir, newNameCleaned))
+	}
 
 	var docChanges []any
 
@@ -113,12 +178,44 @@ func HandleTextDocumentRename(state *state.ServerState, context *glsp.Context, p
 		lines := strings.Split(string(indexDoc.Content), "\n")
 
 		for _, link := range indexDoc.Links {
-			if filepath.Clean(link.Path) == oldRelPath {
+			var linkAbsPath string
+			if strings.HasPrefix(link.Path, "/") {
+				cleanPath := filepath.Clean(link.Path)
+				cleanPath = strings.TrimPrefix(cleanPath, string(filepath.Separator))
+				cleanPath = strings.TrimPrefix(cleanPath, "/")
+				linkAbsPath = filepath.Join(state.WorkspaceRoot, cleanPath)
+			} else {
+				sourceAbsPath := strings.TrimPrefix(indexUri, "file://")
+				sourceDir := filepath.Dir(sourceAbsPath)
+				linkAbsPath = filepath.Clean(filepath.Join(sourceDir, link.Path))
+			}
+
+			if filepath.Clean(linkAbsPath) == filepath.Clean(oldAbsPath) {
 				lineIdx := link.Range.Start.Line
 				if int(lineIdx) < len(lines) {
 					oldLineText := lines[lineIdx]
+
+					var newLinkPath string
+					if strings.HasPrefix(link.Path, "/") {
+						relToRoot, err := filepath.Rel(state.WorkspaceRoot, newAbsPath)
+						if err == nil {
+							newLinkPath = "/" + filepath.ToSlash(relToRoot)
+						} else {
+							newLinkPath = "/" + filepath.ToSlash(newAbsPath)
+						}
+					} else {
+						sourceAbsPath := strings.TrimPrefix(indexUri, "file://")
+						sourceDir := filepath.Dir(sourceAbsPath)
+						relToDoc, err := filepath.Rel(sourceDir, newAbsPath)
+						if err == nil {
+							newLinkPath = filepath.ToSlash(relToDoc)
+						} else {
+							newLinkPath = filepath.ToSlash(newAbsPath)
+						}
+					}
+
 					// Strictly replace the path within the parentheses to avoid false positives
-					newLineText := strings.Replace(oldLineText, "("+link.Path+")", "("+newRelPath+")", 1)
+					newLineText := strings.Replace(oldLineText, "("+link.Path+")", "("+newLinkPath+")", 1)
 
 					if oldLineText != newLineText {
 						edits = append(edits, protocol.TextEdit{
@@ -175,8 +272,30 @@ func HandleTextDocumentPrepareRename(state *state.ServerState, context *glsp.Con
 	for i := range docInfo.Links {
 		link := &docInfo.Links[i]
 		if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
-			targetLink = link
-			break
+			if link.Range.Start.Line == link.Range.End.Line {
+				if params.Position.Character >= link.Range.Start.Character && params.Position.Character <= link.Range.End.Character {
+					targetLink = link
+					break
+				}
+			} else {
+				onStartLine := cursorLine == link.Range.Start.Line
+				onEndLine := cursorLine == link.Range.End.Line
+				if (!onStartLine || params.Position.Character >= link.Range.Start.Character) &&
+					(!onEndLine || params.Position.Character <= link.Range.End.Character) {
+					targetLink = link
+					break
+				}
+			}
+		}
+	}
+
+	if targetLink == nil {
+		for i := range docInfo.Links {
+			link := &docInfo.Links[i]
+			if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
+				targetLink = link
+				break
+			}
 		}
 	}
 

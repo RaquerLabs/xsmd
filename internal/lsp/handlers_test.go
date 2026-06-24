@@ -362,3 +362,232 @@ Anchor link: [Section](#section)
 		t.Errorf("expected diagnostic message to mention 'Broken link', got '%s'", diag.Message)
 	}
 }
+
+func TestNewLinkingStrategy(t *testing.T) {
+	s := state.NewServerState()
+	s.WorkspaceRoot = "/workspace"
+
+	// 1. Parse and index content for testing
+	_ = s.ParseAndIndexContent("file:///workspace/file1.md", []byte(`# File One
+
+Check out [File Two](file2.md).
+`))
+
+	_ = s.ParseAndIndexContent("file:///workspace/file2.md", []byte(`# File Two
+
+No links here.
+`))
+
+	_ = s.ParseAndIndexContent("file:///workspace/sub/file3.md", []byte(`# File Three
+
+No links here.
+`))
+
+	_ = s.ParseAndIndexContent("file:///workspace/sub/file4.md", []byte(`# File Four
+
+Root link to [File Two](/file2.md) and relative link to [File Three](file3.md).
+`))
+
+	handler := BuildHandler(s)
+
+	// --- Test Definition ---
+	// Root-relative definition resolution
+	paramsRoot := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/sub/file4.md",
+			},
+			Position: protocol.Position{
+				Line:      2,
+				Character: 20, // inside [File Two](/file2.md)
+			},
+		},
+	}
+	resRoot, err := handler.TextDocumentDefinition(nil, paramsRoot)
+	if err != nil {
+		t.Fatalf("definition root link error: %v", err)
+	}
+	locRoot, ok := resRoot.(protocol.Location)
+	if !ok {
+		t.Fatalf("expected protocol.Location for root link definition, got %T", resRoot)
+	}
+	if locRoot.URI != "file:///workspace/file2.md" {
+		t.Errorf("expected destination URI 'file:///workspace/file2.md', got '%s'", locRoot.URI)
+	}
+
+	// Folder-relative definition resolution
+	paramsDir := &protocol.DefinitionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/sub/file4.md",
+			},
+			Position: protocol.Position{
+				Line:      2,
+				Character: 60, // inside [File Three](file3.md)
+			},
+		},
+	}
+	resDir, err := handler.TextDocumentDefinition(nil, paramsDir)
+	if err != nil {
+		t.Fatalf("definition relative link error: %v", err)
+	}
+	locDir, ok := resDir.(protocol.Location)
+	if !ok {
+		t.Fatalf("expected protocol.Location for relative link definition, got %T", resDir)
+	}
+	if locDir.URI != "file:///workspace/sub/file3.md" {
+		t.Errorf("expected destination URI 'file:///workspace/sub/file3.md', got '%s'", locDir.URI)
+	}
+
+	// --- Test References ---
+	// References for file2.md should find links in file1.md and sub/file4.md
+	paramsRefs := &protocol.ReferenceParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/file2.md",
+			},
+		},
+	}
+	resRefs, err := handler.TextDocumentReferences(nil, paramsRefs)
+	if err != nil {
+		t.Fatalf("references error: %v", err)
+	}
+	if len(resRefs) != 2 {
+		t.Fatalf("expected 2 references to file2.md, got %d", len(resRefs))
+	}
+	found1 := false
+	found4 := false
+	for _, ref := range resRefs {
+		if ref.URI == "file:///workspace/file1.md" {
+			found1 = true
+		} else if ref.URI == "file:///workspace/sub/file4.md" {
+			found4 = true
+		}
+	}
+	if !found1 || !found4 {
+		t.Errorf("did not find references in expected files (found1=%v, found4=%v)", found1, found4)
+	}
+
+	// --- Test Diagnostics ---
+	_ = s.ParseAndIndexContent("file:///workspace/doc_diag.md", []byte(`# Document With Diagnostics
+
+Working link: [File Two](file2.md)
+Broken link: [Missing Note](missing.md)
+Root working: [File Two](/file2.md)
+Root broken: [Missing](/missing.md)
+`))
+	var notifiedMethod string
+	var notifiedParams *protocol.PublishDiagnosticsParams
+	ctx := &glsp.Context{
+		Notify: func(method string, params any) {
+			notifiedMethod = method
+			if p, ok := params.(*protocol.PublishDiagnosticsParams); ok {
+				notifiedParams = p
+			}
+		},
+	}
+	PublishDiagnostics(s, ctx, "file:///workspace/doc_diag.md")
+	if notifiedMethod != "textDocument/publishDiagnostics" {
+		t.Fatalf("expected notified method 'textDocument/publishDiagnostics', got '%s'", notifiedMethod)
+	}
+	if notifiedParams == nil || len(notifiedParams.Diagnostics) != 2 {
+		t.Fatalf("expected exactly 2 diagnostics for broken links, got %d", len(notifiedParams.Diagnostics))
+	}
+	diagCount := 0
+	for _, d := range notifiedParams.Diagnostics {
+		if strings.Contains(d.Message, "Broken link") {
+			diagCount++
+		}
+	}
+	if diagCount != 2 {
+		t.Errorf("expected 2 broken link diagnostics, got %d", diagCount)
+	}
+
+	// --- Test Rename ---
+	// Rename file2.md -> new_file2.md from sub/file4.md where it is root-relative
+	paramsRename := &protocol.RenameParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/sub/file4.md",
+			},
+			Position: protocol.Position{
+				Line:      2,
+				Character: 20, // inside [File Two](/file2.md)
+			},
+		},
+		NewName: "new_file2.md",
+	}
+	resRename, err := handler.TextDocumentRename(nil, paramsRename)
+	if err != nil {
+		t.Fatalf("rename error: %v", err)
+	}
+	if resRename == nil {
+		t.Fatal("expected non-nil WorkspaceEdit")
+	}
+
+	// It should output text updates in file1.md and sub/file4.md
+	textEditFound1 := false
+	textEditFound4 := false
+	renameOpFound := false
+
+	for _, change := range resRename.DocumentChanges {
+		switch op := change.(type) {
+		case protocol.TextDocumentEdit:
+			if op.TextDocument.URI == "file:///workspace/file1.md" {
+				textEditFound1 = true
+				te := op.Edits[0].(protocol.TextEdit)
+				if !strings.Contains(te.NewText, "new_file2.md") {
+					t.Errorf("expected file1.md edit to use 'new_file2.md', got: %s", te.NewText)
+				}
+			} else if op.TextDocument.URI == "file:///workspace/sub/file4.md" {
+				textEditFound4 = true
+				te := op.Edits[0].(protocol.TextEdit)
+				if !strings.Contains(te.NewText, "/new_file2.md") {
+					t.Errorf("expected sub/file4.md edit to use '/new_file2.md', got: %s", te.NewText)
+				}
+			}
+		case protocol.RenameFile:
+			renameOpFound = true
+			if op.OldURI != "file:///workspace/file2.md" {
+				t.Errorf("expected RenameFile OldURI 'file:///workspace/file2.md', got '%s'", op.OldURI)
+			}
+			if op.NewURI != "file:///workspace/new_file2.md" {
+				t.Errorf("expected RenameFile NewURI 'file:///workspace/new_file2.md', got '%s'", op.NewURI)
+			}
+		}
+	}
+	if !textEditFound1 || !textEditFound4 || !renameOpFound {
+		t.Errorf("rename changes missing: found1=%v, found4=%v, renameOp=%v", textEditFound1, textEditFound4, renameOpFound)
+	}
+
+	// --- Test Completion ---
+	// Complete from sub/file4.md should generate folder-relative path '../file1.md' for file1.md
+	paramsComp := &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/sub/file4.md",
+			},
+		},
+	}
+	resComp, err := handler.TextDocumentCompletion(nil, paramsComp)
+	if err != nil {
+		t.Fatalf("completion error: %v", err)
+	}
+	items, ok := resComp.([]protocol.CompletionItem)
+	if !ok {
+		t.Fatalf("expected []protocol.CompletionItem, got %T", resComp)
+	}
+	foundComp1 := false
+	for _, item := range items {
+		if item.Label == "File One" {
+			foundComp1 = true
+			if *item.InsertText != "File One](../file1.md)" {
+				t.Errorf("expected insert text to be relative: 'File One](../file1.md)', got '%s'", *item.InsertText)
+			}
+		}
+	}
+	if !foundComp1 {
+		t.Errorf("did not find completion item for File One")
+	}
+}
+
