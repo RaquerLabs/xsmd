@@ -3,9 +3,9 @@ package main
 import (
 	"log"
 
-	"github.com/tliron/glsp/server"
 	"github.com/RaquerLabs/xsmd/internal/lsp"
 	"github.com/RaquerLabs/xsmd/internal/state"
+	"github.com/tliron/glsp/server"
 )
 
 func main() {

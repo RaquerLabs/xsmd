@@ -4,9 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/RaquerLabs/xsmd/internal/state"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/RaquerLabs/xsmd/internal/state"
 )
 
 func setupTestState() *state.ServerState {
@@ -134,12 +134,13 @@ func TestTextDocumentCompletion(t *testing.T) {
 	foundThree := false
 
 	for _, item := range items {
-		if item.Label == "File Two" {
+		switch item.Label {
+		case "File Two":
 			foundTwo = true
 			if *item.InsertText != "File Two](file2.md)" {
 				t.Errorf("unexpected InsertText for File Two: %s", *item.InsertText)
 			}
-		} else if item.Label == "File Three" {
+		case "File Three":
 			foundThree = true
 			if *item.InsertText != "File Three](sub/file3.md)" {
 				t.Errorf("unexpected InsertText for File Three: %s", *item.InsertText)
@@ -222,7 +223,7 @@ func TestTextDocumentCompletionFiltering(t *testing.T) {
 	handler := BuildHandler(s)
 
 	// Add a new file that has a partially typed link with a space:
-	// Line 0: Click [Two 
+	// Line 0: Click [Two
 	_ = s.ParseAndIndexContent("file:///workspace/file5.md", []byte("Click [Two "))
 
 	params := &protocol.CompletionParams{
@@ -263,7 +264,7 @@ func TestTextDocumentCompletionWithTrailingSpace(t *testing.T) {
 	handler := BuildHandler(s)
 
 	// Add a new file that has a partially typed link followed by spaces:
-	// Line 0: Click [Two   
+	// Line 0: Click [Two
 	_ = s.ParseAndIndexContent("file:///workspace/file6.md", []byte("Click [Two   "))
 
 	params := &protocol.CompletionParams{
@@ -362,10 +363,6 @@ func TestTextDocumentCompletionFuzzyDirectoryLeaking(t *testing.T) {
 		t.Fatalf("expected 0 completion items, got %d", len(items))
 	}
 }
-
-
-
-
 
 func TestRenameLinkPrepare(t *testing.T) {
 	s := setupTestState()
@@ -680,9 +677,10 @@ Root link to [File Two](/file2.md) and relative link to [File Three](file3.md).
 	found1 := false
 	found4 := false
 	for _, ref := range resRefs {
-		if ref.URI == "file:///workspace/file1.md" {
+		switch ref.URI {
+		case "file:///workspace/file1.md":
 			found1 = true
-		} else if ref.URI == "file:///workspace/sub/file4.md" {
+		case "file:///workspace/sub/file4.md":
 			found4 = true
 		}
 	}
@@ -755,13 +753,14 @@ Root broken: [Missing](/missing.md)
 	for _, change := range resRename.DocumentChanges {
 		switch op := change.(type) {
 		case protocol.TextDocumentEdit:
-			if op.TextDocument.URI == "file:///workspace/file1.md" {
+			switch op.TextDocument.URI {
+			case "file:///workspace/file1.md":
 				textEditFound1 = true
 				te := op.Edits[0].(protocol.TextEdit)
 				if !strings.Contains(te.NewText, "new_file2.md") {
 					t.Errorf("expected file1.md edit to use 'new_file2.md', got: %s", te.NewText)
 				}
-			} else if op.TextDocument.URI == "file:///workspace/sub/file4.md" {
+			case "file:///workspace/sub/file4.md":
 				textEditFound4 = true
 				te := op.Edits[0].(protocol.TextEdit)
 				if !strings.Contains(te.NewText, "/new_file2.md") {
@@ -817,4 +816,3 @@ Root broken: [Missing](/missing.md)
 		t.Errorf("did not find completion item for File One")
 	}
 }
-

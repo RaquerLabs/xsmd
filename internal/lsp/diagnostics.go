@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/RaquerLabs/xsmd/internal/state"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/RaquerLabs/xsmd/internal/state"
 )
 
 // PublishDiagnostics checks for broken links in the document and publishes diagnostics to the client
