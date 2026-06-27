@@ -152,17 +152,32 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 	}, nil
 }
 
-// fuzzyMatch checks if the query subsequence matches the target string case-insensitively.
+// fuzzyMatch checks if each space-separated term in the query matches the target string as a subsequence case-insensitively.
 func fuzzyMatch(target, query string) bool {
+	words := strings.Fields(query)
+	if len(words) == 0 {
+		return true
+	}
+
+	for _, word := range words {
+		if !subsequenceMatch(target, word) {
+			return false
+		}
+	}
+	return true
+}
+
+// subsequenceMatch checks if the word subsequence matches the target string case-insensitively.
+func subsequenceMatch(target, word string) bool {
 	target = strings.ToLower(target)
-	query = strings.ToLower(query)
+	word = strings.ToLower(word)
 
 	tIdx := 0
-	for qIdx := 0; qIdx < len(query); qIdx++ {
-		qChar := query[qIdx]
+	for wIdx := 0; wIdx < len(word); wIdx++ {
+		wChar := word[wIdx]
 		found := false
 		for ; tIdx < len(target); tIdx++ {
-			if target[tIdx] == qChar {
+			if target[tIdx] == wChar {
 				found = true
 				tIdx++
 				break

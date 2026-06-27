@@ -1004,3 +1004,44 @@ func TestWorkspaceDidCreateAndDeleteFiles(t *testing.T) {
 		t.Errorf("expected document %s to be deleted from index", uri)
 	}
 }
+
+func TestTextDocumentCompletionFuzzyOutOfOrder(t *testing.T) {
+	s := setupTestState()
+	handler := BuildHandler(s)
+
+	// We have a file with Title "File Two" in setupTestState().
+	// We want to type "Two File" to search for it, and verify it still matches.
+	_ = s.ParseAndIndexContent("file:///workspace/file_fuzzy.md", []byte("Click [Two File"))
+
+	params := &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/file_fuzzy.md",
+			},
+			Position: protocol.Position{
+				Line:      0,
+				Character: 15, // right after "Click [Two File"
+			},
+		},
+	}
+
+	res, err := handler.TextDocumentCompletion(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	list, ok := res.(protocol.CompletionList)
+	if !ok {
+		t.Fatalf("expected protocol.CompletionList, got %T", res)
+	}
+	items := list.Items
+
+	// We expect 1 completion item: "File Two", because "Two File" matches both "Two" and "File".
+	if len(items) != 1 {
+		t.Fatalf("expected 1 completion item, got %d", len(items))
+	}
+
+	if items[0].Label != "File Two" {
+		t.Errorf("expected completion item 'File Two', got '%s'", items[0].Label)
+	}
+}
