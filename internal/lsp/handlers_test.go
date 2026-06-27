@@ -136,12 +136,13 @@ func TestTextDocumentCompletion(t *testing.T) {
 	foundThree := false
 
 	for _, item := range items {
-		if item.Label == "File Two" {
+		switch item.Label {
+		case "File Two":
 			foundTwo = true
 			if *item.InsertText != "File Two](file2.md)" {
 				t.Errorf("unexpected InsertText for File Two: %s", *item.InsertText)
 			}
-		} else if item.Label == "File Three" {
+		case "File Three":
 			foundThree = true
 			if *item.InsertText != "File Three](sub/file3.md)" {
 				t.Errorf("unexpected InsertText for File Three: %s", *item.InsertText)
@@ -678,9 +679,10 @@ Root link to [File Two](/file2.md) and relative link to [File Three](file3.md).
 	found1 := false
 	found4 := false
 	for _, ref := range resRefs {
-		if ref.URI == "file:///workspace/file1.md" {
+		switch ref.URI {
+		case "file:///workspace/file1.md":
 			found1 = true
-		} else if ref.URI == "file:///workspace/sub/file4.md" {
+		case "file:///workspace/sub/file4.md":
 			found4 = true
 		}
 	}
@@ -753,13 +755,14 @@ Root broken: [Missing](/missing.md)
 	for _, change := range resRename.DocumentChanges {
 		switch op := change.(type) {
 		case protocol.TextDocumentEdit:
-			if op.TextDocument.URI == "file:///workspace/file1.md" {
+			switch op.TextDocument.URI {
+			case "file:///workspace/file1.md":
 				textEditFound1 = true
 				te := op.Edits[0].(protocol.TextEdit)
 				if !strings.Contains(te.NewText, "new_file2.md") {
 					t.Errorf("expected file1.md edit to use 'new_file2.md', got: %s", te.NewText)
 				}
-			} else if op.TextDocument.URI == "file:///workspace/sub/file4.md" {
+			case "file:///workspace/sub/file4.md":
 				textEditFound4 = true
 				te := op.Edits[0].(protocol.TextEdit)
 				if !strings.Contains(te.NewText, "/new_file2.md") {
