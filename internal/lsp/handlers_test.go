@@ -1,12 +1,14 @@
 package lsp
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/RaquerLabs/xsmd/internal/state"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
-	"github.com/RaquerLabs/xsmd/internal/state"
 )
 
 func setupTestState() *state.ServerState {
@@ -222,7 +224,7 @@ func TestTextDocumentCompletionFiltering(t *testing.T) {
 	handler := BuildHandler(s)
 
 	// Add a new file that has a partially typed link with a space:
-	// Line 0: Click [Two 
+	// Line 0: Click [Two
 	_ = s.ParseAndIndexContent("file:///workspace/file5.md", []byte("Click [Two "))
 
 	params := &protocol.CompletionParams{
@@ -263,7 +265,7 @@ func TestTextDocumentCompletionWithTrailingSpace(t *testing.T) {
 	handler := BuildHandler(s)
 
 	// Add a new file that has a partially typed link followed by spaces:
-	// Line 0: Click [Two   
+	// Line 0: Click [Two
 	_ = s.ParseAndIndexContent("file:///workspace/file6.md", []byte("Click [Two   "))
 
 	params := &protocol.CompletionParams{
@@ -362,10 +364,6 @@ func TestTextDocumentCompletionFuzzyDirectoryLeaking(t *testing.T) {
 		t.Fatalf("expected 0 completion items, got %d", len(items))
 	}
 }
-
-
-
-
 
 func TestRenameLinkPrepare(t *testing.T) {
 	s := setupTestState()
@@ -818,3 +816,188 @@ Root broken: [Missing](/missing.md)
 	}
 }
 
+func TestTextDocumentDidSave(t *testing.T) {
+	tempDir := t.TempDir()
+
+	filePath := filepath.Join(tempDir, "saved.md")
+	content := []byte("# Saved File\nSome content.")
+	if err := os.WriteFile(filePath, content, 0644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	s := state.NewServerState()
+	s.WorkspaceRoot = tempDir
+	handler := BuildHandler(s)
+
+	uri := "file://" + filePath
+	params := &protocol.DidSaveTextDocumentParams{
+		TextDocument: protocol.TextDocumentIdentifier{
+			URI: uri,
+		},
+	}
+
+	var notifiedMethod string
+	var notifiedParams *protocol.PublishDiagnosticsParams
+
+	ctx := &glsp.Context{
+		Notify: func(method string, params any) {
+			notifiedMethod = method
+			if p, ok := params.(*protocol.PublishDiagnosticsParams); ok {
+				notifiedParams = p
+			}
+		},
+	}
+
+	err := handler.TextDocumentDidSave(ctx, params)
+	if err != nil {
+		t.Fatalf("unexpected error on save: %v", err)
+	}
+
+	s.Mu.RLock()
+	docInfo, exists := s.Index[uri]
+	s.Mu.RUnlock()
+
+	if !exists {
+		t.Fatalf("expected document %s to be indexed", uri)
+	}
+
+	if docInfo.Title != "Saved File" {
+		t.Errorf("expected Title 'Saved File', got '%s'", docInfo.Title)
+	}
+
+	if notifiedMethod != "textDocument/publishDiagnostics" {
+		t.Errorf("expected notified method 'textDocument/publishDiagnostics', got '%s'", notifiedMethod)
+	}
+
+	if notifiedParams == nil || notifiedParams.URI != uri {
+		t.Errorf("expected diagnostics for URI '%s', got '%v'", uri, notifiedParams)
+	}
+}
+
+func TestWorkspaceDidChangeWatchedFiles(t *testing.T) {
+	tempDir := t.TempDir()
+
+	filePath := filepath.Join(tempDir, "watched.md")
+	content := []byte("# Watched File\nSome content.")
+	if err := os.WriteFile(filePath, content, 0644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	s := state.NewServerState()
+	s.WorkspaceRoot = tempDir
+	handler := BuildHandler(s)
+
+	uri := "file://" + filePath
+
+	// Test Created/Changed event
+	params := &protocol.DidChangeWatchedFilesParams{
+		Changes: []protocol.FileEvent{
+			{
+				URI:  uri,
+				Type: protocol.FileChangeTypeCreated,
+			},
+		},
+	}
+
+	err := handler.WorkspaceDidChangeWatchedFiles(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error on change watched files: %v", err)
+	}
+
+	s.Mu.RLock()
+	docInfo, exists := s.Index[uri]
+	s.Mu.RUnlock()
+
+	if !exists {
+		t.Fatalf("expected document %s to be indexed", uri)
+	}
+	if docInfo.Title != "Watched File" {
+		t.Errorf("expected Title 'Watched File', got '%s'", docInfo.Title)
+	}
+
+	// Test Deleted event
+	paramsDeleted := &protocol.DidChangeWatchedFilesParams{
+		Changes: []protocol.FileEvent{
+			{
+				URI:  uri,
+				Type: protocol.FileChangeTypeDeleted,
+			},
+		},
+	}
+
+	err = handler.WorkspaceDidChangeWatchedFiles(nil, paramsDeleted)
+	if err != nil {
+		t.Fatalf("unexpected error on delete watched files: %v", err)
+	}
+
+	s.Mu.RLock()
+	_, existsAfterDelete := s.Index[uri]
+	s.Mu.RUnlock()
+
+	if existsAfterDelete {
+		t.Errorf("expected document %s to be deleted from index", uri)
+	}
+}
+
+func TestWorkspaceDidCreateAndDeleteFiles(t *testing.T) {
+	tempDir := t.TempDir()
+
+	filePath := filepath.Join(tempDir, "created.md")
+	content := []byte("# Created File\nSome content.")
+	if err := os.WriteFile(filePath, content, 0644); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+
+	s := state.NewServerState()
+	s.WorkspaceRoot = tempDir
+	handler := BuildHandler(s)
+
+	uri := "file://" + filePath
+
+	// Test DidCreate
+	paramsCreate := &protocol.CreateFilesParams{
+		Files: []protocol.FileCreate{
+			{
+				URI: uri,
+			},
+		},
+	}
+
+	err := handler.WorkspaceDidCreateFiles(nil, paramsCreate)
+	if err != nil {
+		t.Fatalf("unexpected error on create files: %v", err)
+	}
+
+	s.Mu.RLock()
+	docInfo, exists := s.Index[uri]
+	s.Mu.RUnlock()
+
+	if !exists {
+		t.Fatalf("expected document %s to be indexed", uri)
+	}
+	if docInfo.Title != "Created File" {
+		t.Errorf("expected Title 'Created File', got '%s'", docInfo.Title)
+	}
+
+	// Test DidDelete
+	paramsDelete := &protocol.DeleteFilesParams{
+		Files: []protocol.FileDelete{
+			{
+				URI: uri,
+			},
+		},
+	}
+
+	err = handler.WorkspaceDidDeleteFiles(nil, paramsDelete)
+	if err != nil {
+		t.Fatalf("unexpected error on delete files: %v", err)
+	}
+
+	s.Mu.RLock()
+	_, existsAfterDelete := s.Index[uri]
+	s.Mu.RUnlock()
+
+	if existsAfterDelete {
+		t.Errorf("expected document %s to be deleted from index", uri)
+	}
+}

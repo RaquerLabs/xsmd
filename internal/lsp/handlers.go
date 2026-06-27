@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/tliron/glsp"
-	protocol "github.com/tliron/glsp/protocol_3_16"
 	"github.com/RaquerLabs/xsmd/internal/parser"
 	"github.com/RaquerLabs/xsmd/internal/state"
+	"github.com/tliron/glsp"
+	protocol "github.com/tliron/glsp/protocol_3_16"
 	"github.com/yuin/goldmark/ast"
 )
 
@@ -345,11 +345,81 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 
 		// Triggered when you save a file in Neovim (:w)
 		TextDocumentDidSave: func(context *glsp.Context, params *protocol.DidSaveTextDocumentParams) error {
-			return nil
+			uri := params.TextDocument.URI
+			if !strings.HasSuffix(uri, ".md") && !strings.HasSuffix(uri, ".markdown") {
+				return nil
+			}
+
+			path := strings.TrimPrefix(uri, "file://")
+
+			sState.Mu.Lock()
+			err := sState.ParseAndIndexFile(uri, path)
+			sState.Mu.Unlock()
+
+			if err == nil {
+				PublishDiagnostics(sState, context, uri)
+			}
+			return err
 		},
 
 		// Triggered when you close a buffer in Neovim
 		TextDocumentDidClose: func(context *glsp.Context, params *protocol.DidCloseTextDocumentParams) error {
+			return nil
+		},
+
+		WorkspaceDidChangeWatchedFiles: func(context *glsp.Context, params *protocol.DidChangeWatchedFilesParams) error {
+			sState.Mu.Lock()
+			defer sState.Mu.Unlock()
+
+			for _, change := range params.Changes {
+				uri := change.URI
+				if !strings.HasSuffix(uri, ".md") && !strings.HasSuffix(uri, ".markdown") {
+					continue
+				}
+				path := strings.TrimPrefix(uri, "file://")
+
+				switch change.Type {
+				case protocol.FileChangeTypeCreated, protocol.FileChangeTypeChanged:
+					err := sState.ParseAndIndexFile(uri, path)
+					if err != nil {
+						log.Printf("Failed to parse watched file %s: %v", path, err)
+					}
+				case protocol.FileChangeTypeDeleted:
+					delete(sState.Index, uri)
+				}
+			}
+			return nil
+		},
+
+		WorkspaceDidCreateFiles: func(context *glsp.Context, params *protocol.CreateFilesParams) error {
+			sState.Mu.Lock()
+			defer sState.Mu.Unlock()
+
+			for _, file := range params.Files {
+				uri := file.URI
+				if !strings.HasSuffix(uri, ".md") && !strings.HasSuffix(uri, ".markdown") {
+					continue
+				}
+				path := strings.TrimPrefix(uri, "file://")
+				err := sState.ParseAndIndexFile(uri, path)
+				if err != nil {
+					log.Printf("Failed to parse created file %s: %v", path, err)
+				}
+			}
+			return nil
+		},
+
+		WorkspaceDidDeleteFiles: func(context *glsp.Context, params *protocol.DeleteFilesParams) error {
+			sState.Mu.Lock()
+			defer sState.Mu.Unlock()
+
+			for _, file := range params.Files {
+				uri := file.URI
+				if !strings.HasSuffix(uri, ".md") && !strings.HasSuffix(uri, ".markdown") {
+					continue
+				}
+				delete(sState.Index, uri)
+			}
 			return nil
 		},
 
