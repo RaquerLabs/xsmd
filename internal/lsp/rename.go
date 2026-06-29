@@ -17,10 +17,10 @@ import (
 var DisableProcessSharedLock = false
 
 // checkAndTrackRenameProcessShared checks if this rename was recently handled by any process.
-// It returns true if it should be ignored (duplicate).
-func checkAndTrackRenameProcessShared(state *state.ServerState, oldAbs, newAbs string) bool {
+// It returns true if it should be ignored (duplicate), and a cleanup function to release the lock.
+func checkAndTrackRenameProcessShared(state *state.ServerState, oldAbs, newAbs string) (bool, func()) {
 	if DisableProcessSharedLock {
-		return false
+		return false, func() {}
 	}
 	// Generate a unique hash for the rename transaction
 	hash := sha256.Sum256([]byte(oldAbs + "->" + newAbs))
@@ -31,7 +31,7 @@ func checkAndTrackRenameProcessShared(state *state.ServerState, oldAbs, newAbs s
 	if err == nil {
 		if time.Since(info.ModTime()) < 5*time.Second {
 			state.LogNoLock(fmt.Sprintf("[PID:%d] checkAndTrackRenameProcessShared: Lock file %s is recent (age: %v), ignoring", os.Getpid(), lockPath, time.Since(info.ModTime())))
-			return true
+			return true, func() {}
 		}
 		// Clean up old stale lock file
 		_ = os.Remove(lockPath)
@@ -45,22 +45,22 @@ func checkAndTrackRenameProcessShared(state *state.ServerState, oldAbs, newAbs s
 			info, errStat := os.Stat(lockPath)
 			if errStat == nil && time.Since(info.ModTime()) < 5*time.Second {
 				state.LogNoLock(fmt.Sprintf("[PID:%d] checkAndTrackRenameProcessShared: Lock file %s was created by another process, ignoring", os.Getpid(), lockPath))
-				return true
+				return true, func() {}
 			}
 		}
 		// Fallback: if we can't write, don't block the rename, but it's not locked.
-		return false
+		return false, func() {}
 	}
 	f.Close()
 
 	state.LogNoLock(fmt.Sprintf("[PID:%d] checkAndTrackRenameProcessShared: Created lock file %s", os.Getpid(), lockPath))
 
-	// Schedule cleanup in our own process too (best effort)
-	time.AfterFunc(5*time.Second, func() {
+	cleanup := func() {
+		state.LogNoLock(fmt.Sprintf("[PID:%d] checkAndTrackRenameProcessShared: Removing lock file %s", os.Getpid(), lockPath))
 		_ = os.Remove(lockPath)
-	})
+	}
 
-	return false
+	return false, cleanup
 }
 
 
@@ -85,19 +85,23 @@ func HandleWorkspaceWillRenameFiles(state *state.ServerState, context *glsp.Cont
 		state.LogNoLock(fmt.Sprintf("[PID:%d] Lookup in ProcessedRenames: key=%s, exists=%t, val=%s", os.Getpid(), oldAbs, exists, val))
 		if exists && val == newAbs {
 			state.LogNoLock(fmt.Sprintf("[PID:%d] Match found in ProcessedRenames, ignoring rename for %s", os.Getpid(), oldAbs))
+			delete(state.ProcessedRenames, oldAbs)
 			continue
 		}
 
 		// Process-shared duplicate check
-		if checkAndTrackRenameProcessShared(state, oldAbs, newAbs) {
+		ignore, cleanup := checkAndTrackRenameProcessShared(state, oldAbs, newAbs)
+		if ignore {
 			state.LogNoLock(fmt.Sprintf("[PID:%d] Match found in process-shared lock file, ignoring rename for %s", os.Getpid(), oldAbs))
 			continue
 		}
+		defer cleanup()
 
 		// Track this rename so that subsequent duplicate triggers (e.g. from duplicate clients) are ignored.
-		// It will be cleaned up when we receive file watch events (didChangeWatchedFiles / didDeleteFiles).
+		// It will be cleaned up when we receive file watch events (didChangeWatchedFiles / didDeleteFiles) or when matched.
 		state.LogNoLock(fmt.Sprintf("[PID:%d] Tracking rename in ProcessedRenames: %s -> %s", os.Getpid(), oldAbs, newAbs))
 		state.ProcessedRenames[oldAbs] = newAbs
+		delete(state.ProcessedRenames, newAbs) // Clear stale target path history to allow immediate rename back
 
 		oldRel, err1 := filepath.Rel(state.WorkspaceRoot, oldAbs)
 		newRel, err2 := filepath.Rel(state.WorkspaceRoot, newAbs)
@@ -259,9 +263,11 @@ func HandleTextDocumentRename(state *state.ServerState, context *glsp.Context, p
 	// Track this rename so that workspace/willRenameFiles is ignored for it
 	state.LogNoLock(fmt.Sprintf("[PID:%d] TextDocumentRename tracking rename in ProcessedRenames: %s -> %s", os.Getpid(), oldAbsPath, newAbsPath))
 	state.ProcessedRenames[oldAbsPath] = newAbsPath
+	delete(state.ProcessedRenames, newAbsPath) // Clear stale target path history to allow immediate rename back
 
 	// Track this rename process-shared
-	_ = checkAndTrackRenameProcessShared(state, oldAbsPath, newAbsPath)
+	_, cleanup := checkAndTrackRenameProcessShared(state, oldAbsPath, newAbsPath)
+	defer cleanup()
 
 	// Ship the combined edits + file move back to Neovim to execute
 	return &protocol.WorkspaceEdit{
