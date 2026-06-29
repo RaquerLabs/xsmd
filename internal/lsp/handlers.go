@@ -22,7 +22,7 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 		ReferencesProvider:   true,
 		FoldingRangeProvider: true,
 		CompletionProvider: &protocol.CompletionOptions{
-			TriggerCharacters: []string{"[", " "},
+			TriggerCharacters: []string{"[", " ", "("},
 		},
 		RenameProvider: &protocol.RenameOptions{
 			PrepareProvider: &prepareProvider,

@@ -53,10 +53,10 @@ The server provides a list of commands for debug:
   - `# Headings`, `## Subheadings`
   - nested lists (`-` or `*`)
 - Autocomplete:
-  Caches the primary `# H1 Title` of every note in the directory.
-  Filtering out files that don't have `# H1 Title` headers,
-  typing `[` pops open a floating menu of note names,
-  automatically injecting a valid folder-relative `[Title Text](../path/to/note.md)` snippet.
+  - Caches the primary `# H1 Title` of every note in the directory.
+    Filtering out files that don't have `# H1 Title` headers.
+  - Typing `[` autocompletes with note names, adding the folder-relative `[Title Text](../path/to/note.md)` snippet.
+  - Typing `(` inside a link (e.g., `[Label](`) autocompletes with paths, also adds the folder-relative snippet.
 - Rename
 
 ## How It Works Under the Hood

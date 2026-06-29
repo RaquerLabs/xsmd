@@ -36,19 +36,22 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 		}
 	}
 
-	// 2. Look backward from the cursor to find the opening '['
+	// 2. Look backward from the cursor to find the opening '[' or '('
 	startChar := -1
+	var triggerType byte // '[' or '('
 	var query string
 	if hasLine {
 		for i := characterPos - 1; i >= 0; i-- {
-			// If we see a closing bracket before an opening one, it means the
-			// link is already closed (e.g., "[]"), so don't trigger anything.
-			if currentLine[i] == ']' {
+			char := currentLine[i]
+			// If we see a closing bracket/parenthesis before an opening one,
+			// it means the link/path is already closed, so don't trigger.
+			if char == ']' || char == ')' {
 				break
 			}
 
-			if currentLine[i] == '[' {
+			if char == '[' || char == '(' {
 				startChar = i
+				triggerType = char
 				break
 			}
 		}
@@ -57,9 +60,9 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 		}
 	}
 
-	// If no valid open '[' is found behind the cursor, do not offer completions
+	// If no valid open '[' or '(' is found behind the cursor, do not offer completions
 	if startChar == -1 {
-		state.LogNoLock("HandleTextDocumentCompletion: No open '[' found before cursor. Returning nil.")
+		state.LogNoLock("HandleTextDocumentCompletion: No open '[' or '(' found before cursor. Returning nil.")
 		return nil, nil
 	}
 
@@ -119,30 +122,40 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 			}
 		}
 
-		// The text that actually gets inserted (fallback/InsertText)
 		var markdownLink string
-		if startChar != -1 {
-			markdownLink = fmt.Sprintf("%s](%s)", docInfo.Title, relPathSlash)
+		var filterText string
+		var label string
+		var itemDetail string
+		var itemKind protocol.CompletionItemKind
+
+		if triggerType == '(' {
+			markdownLink = relPathSlash
+			filterText = relPathSlash
+			label = relPathSlash
+			itemDetail = docInfo.Title
+			itemKind = protocol.CompletionItemKindFile
 		} else {
-			markdownLink = fmt.Sprintf("[%s](%s)", docInfo.Title, relPathSlash)
+			// Original logic for '['
+			if startChar != -1 {
+				markdownLink = fmt.Sprintf("%s](%s)", docInfo.Title, relPathSlash)
+			} else {
+				markdownLink = fmt.Sprintf("[%s](%s)", docInfo.Title, relPathSlash)
+			}
+			filterText = docInfo.Title
+			label = docInfo.Title
+			itemDetail = relPathSlash
+			itemKind = protocol.CompletionItemKindFile
 		}
-
-		// The client matches against the doc title inside the editRange
-		filterText := docInfo.Title
-
-		// Store kinds and descriptions as local vars to pass pointers safely
-		itemKind := protocol.CompletionItemKindFile
-		itemDetail := relPathSlash
 
 		item := protocol.CompletionItem{
-			Label:      docInfo.Title, // What shows in the UI dropdown
-			FilterText: &filterText,   // What the editor uses to fuzzy-match behind the scenes
+			Label:      label,
+			FilterText: &filterText,
 			Kind:       &itemKind,
 			Detail:     &itemDetail,
-			InsertText: &markdownLink, // What gets injected into the buffer
+			InsertText: &markdownLink,
 		}
 
-		// If we found a valid open '[', we specify a TextEdit starting after the '['.
+		// If we found a valid open '[' or '(', we specify a TextEdit starting after it.
 		if startChar != -1 {
 			editRange := protocol.Range{
 				Start: protocol.Position{Line: params.Position.Line, Character: uint32(startChar + 1)},

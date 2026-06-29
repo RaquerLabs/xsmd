@@ -81,6 +81,6 @@ When resolving Markdown links across Definition lookup, references search, diagn
   - Detected when the destination path does _not_ start with `/`.
   - The path is resolved relative to the parent directory of the file containing the link.
 - Autocompletion:
-  - Automatically inserts folder-relative paths
-    (e.g. `../` and relative subdirectories)
-    based on the location of the active document being edited.
+  - Supports two trigger patterns:
+    - `[`
+    - `(` inside an existing link (e.g., `[Label](`)

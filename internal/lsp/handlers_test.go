@@ -1120,3 +1120,53 @@ func TestTextDocumentCompletionIgnoreDirs(t *testing.T) {
 		t.Errorf("expected item 'File Two', got '%s'", list.Items[0].Label)
 	}
 }
+
+func TestTextDocumentCompletionParenthesisTrigger(t *testing.T) {
+	s := setupTestState()
+	handler := BuildHandler(s)
+
+	// Add file1.md with content: "Check [hello](f"
+	_ = s.ParseAndIndexContent("file:///workspace/file1.md", []byte("Check [hello](f"))
+
+	params := &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/file1.md",
+			},
+			Position: protocol.Position{
+				Line:      0,
+				Character: 15, // right after the "("
+			},
+		},
+	}
+
+	res, err := handler.TextDocumentCompletion(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	list, ok := res.(protocol.CompletionList)
+	if !ok {
+		t.Fatalf("expected protocol.CompletionList, got %T", res)
+	}
+
+	if len(list.Items) == 0 {
+		t.Fatalf("expected some completion items, got 0")
+	}
+
+	var foundFile2 bool
+	for _, item := range list.Items {
+		if item.Label == "file2.md" {
+			foundFile2 = true
+			if *item.InsertText != "file2.md" {
+				t.Errorf("expected InsertText to be 'file2.md', got '%s'", *item.InsertText)
+			}
+			if *item.Detail != "File Two" {
+				t.Errorf("expected Detail to be 'File Two', got '%s'", *item.Detail)
+			}
+		}
+	}
+	if !foundFile2 {
+		t.Errorf("expected to find completion item for 'file2.md'")
+	}
+}
