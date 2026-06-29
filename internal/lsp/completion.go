@@ -12,6 +12,8 @@ import (
 
 // HandleTextDocumentCompletion resolves autocomplete options when typing '[' in Markdown
 func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Context, params *protocol.CompletionParams) (any, error) {
+	state.Log(fmt.Sprintf("HandleTextDocumentCompletion: URI=%s, Line=%d, Char=%d", params.TextDocument.URI, params.Position.Line, params.Position.Character))
+
 	state.Mu.RLock()
 	defer state.Mu.RUnlock()
 
@@ -57,6 +59,7 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 
 	// If no valid open '[' is found behind the cursor, do not offer completions
 	if startChar == -1 {
+		state.LogNoLock("HandleTextDocumentCompletion: No open '[' found before cursor. Returning nil.")
 		return nil, nil
 	}
 
@@ -67,6 +70,8 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 		queryCleaned = strings.TrimSpace(query)
 		queryFiltered = true
 	}
+
+	state.LogNoLock(fmt.Sprintf("HandleTextDocumentCompletion: Query found: '%s' (cleaned: '%s', filtered: %v)", query, queryCleaned, queryFiltered))
 
 	for uri, docInfo := range state.Index {
 		if uri == params.TextDocument.URI {
@@ -146,6 +151,7 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 		items = append(items, item)
 	}
 
+	state.LogNoLock(fmt.Sprintf("HandleTextDocumentCompletion: Returning %d items", len(items)))
 	return protocol.CompletionList{
 		IsIncomplete: len(items) > 0,
 		Items:        items,

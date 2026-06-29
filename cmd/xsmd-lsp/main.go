@@ -13,10 +13,15 @@ import (
 
 func main() {
 	sState := state.NewServerState()
+	sState.DebugLog = debug
 	handler := lsp.BuildHandler(sState)
 
 	s := server.NewServer(handler, "xsmd-lsp", false)
 	log.Fatal(s.RunStdio())
+}
+
+func debug(msg string) {
+	logToFile(msg)
 }
 
 func logToFile(msg string) {

@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"fmt"
 	"log"
 	"path/filepath"
 	"strings"
@@ -26,6 +27,9 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 		RenameProvider: &protocol.RenameOptions{
 			PrepareProvider: &prepareProvider,
 		},
+		ExecuteCommandProvider: &protocol.ExecuteCommandOptions{
+			Commands: []string{"xsmd.dumpState"},
+		},
 		Workspace: &protocol.ServerCapabilitiesWorkspace{
 			FileOperations: &protocol.ServerCapabilitiesWorkspaceFileOperations{
 				WillRename: &protocol.FileOperationRegistrationOptions{
@@ -49,6 +53,8 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 					sState.WorkspaceRoot = startPath // Fallback
 				}
 			}
+
+			sState.LoadConfig()
 
 			// Kick off the workspace crawl asynchronously
 			go func() {
@@ -438,6 +444,24 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 
 		TextDocumentPrepareRename: func(context *glsp.Context, params *protocol.PrepareRenameParams) (any, error) {
 			return HandleTextDocumentPrepareRename(sState, context, params)
+		},
+
+		WorkspaceExecuteCommand: func(context *glsp.Context, params *protocol.ExecuteCommandParams) (any, error) {
+			if params.Command == "xsmd.dumpState" {
+				sState.Mu.RLock()
+				keys := make([]string, 0, len(sState.Index))
+				for k := range sState.Index {
+					keys = append(keys, k)
+				}
+				debugLog := sState.DebugLog
+				sState.Mu.RUnlock()
+
+				if debugLog != nil {
+					debugLog(fmt.Sprintf("Current Index Keys: %v", keys))
+				}
+				return "State dumped to xsmd.log", nil
+			}
+			return nil, nil
 		},
 	}
 

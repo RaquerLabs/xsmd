@@ -74,3 +74,20 @@ mise run clean
 4.  Format & Test:
     `mise run format && mise run test`
 5.  Submit a PR
+
+## Inspecting
+
+Add this to your init.lua:
+
+```lua
+vim.lsp.set_log_level("debug")
+-- This opens the log file in a split window
+vim.cmd("edit " .. vim.lsp.get_log_path())
+```
+
+You can use this to print the state index content:
+
+```plaintext
+:lua vim.lsp.buf.execute_command({command = "xsmd.dumpState"})
+```
+
