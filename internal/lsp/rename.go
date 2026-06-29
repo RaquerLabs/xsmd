@@ -115,17 +115,9 @@ func HandleWorkspaceWillRenameFiles(state *state.ServerState, context *glsp.Cont
 		}
 
 		// Track this rename so that subsequent duplicate triggers (e.g. from duplicate clients) are ignored.
-		// It will be cleaned up when we receive file watch events (didChangeWatchedFiles / didDeleteFiles) or after a TTL fallback.
+		// It will be cleaned up when we receive file watch events (didChangeWatchedFiles / didDeleteFiles).
 		state.LogNoLock(fmt.Sprintf("[PID:%d] Tracking rename in ProcessedRenames: %s -> %s", os.Getpid(), oldAbs, newAbs))
 		state.ProcessedRenames[oldAbs] = newAbs
-		time.AfterFunc(10*time.Second, func() {
-			state.Mu.Lock()
-			defer state.Mu.Unlock()
-			if val, exists := state.ProcessedRenames[oldAbs]; exists && val == newAbs {
-				state.LogNoLock(fmt.Sprintf("[PID:%d] TTL expired for %s, deleting from ProcessedRenames", os.Getpid(), oldAbs))
-				delete(state.ProcessedRenames, oldAbs)
-			}
-		})
 
 		oldRel, err1 := filepath.Rel(state.WorkspaceRoot, oldAbs)
 		newRel, err2 := filepath.Rel(state.WorkspaceRoot, newAbs)
@@ -354,14 +346,6 @@ func HandleTextDocumentRename(state *state.ServerState, context *glsp.Context, p
 	// Track this rename so that workspace/willRenameFiles is ignored for it
 	state.LogNoLock(fmt.Sprintf("[PID:%d] TextDocumentRename tracking rename in ProcessedRenames: %s -> %s", os.Getpid(), oldAbsPath, newAbsPath))
 	state.ProcessedRenames[oldAbsPath] = newAbsPath
-	time.AfterFunc(10*time.Second, func() {
-		state.Mu.Lock()
-		defer state.Mu.Unlock()
-		if val, exists := state.ProcessedRenames[oldAbsPath]; exists && val == newAbsPath {
-			state.LogNoLock(fmt.Sprintf("[PID:%d] TextDocumentRename TTL expired for %s, deleting from ProcessedRenames", os.Getpid(), oldAbsPath))
-			delete(state.ProcessedRenames, oldAbsPath)
-		}
-	})
 
 	// Track this rename process-shared
 	_ = checkAndTrackRenameProcessShared(state, oldAbsPath, newAbsPath)

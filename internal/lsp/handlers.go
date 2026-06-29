@@ -392,6 +392,7 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 					}
 				case protocol.FileChangeTypeDeleted:
 					delete(sState.Index, uri)
+					delete(sState.ProcessedRenames, cleanURIPath(uri))
 				}
 			}
 			return nil
@@ -425,6 +426,7 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 					continue
 				}
 				delete(sState.Index, uri)
+				delete(sState.ProcessedRenames, cleanURIPath(uri))
 			}
 			return nil
 		},
