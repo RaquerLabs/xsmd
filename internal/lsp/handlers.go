@@ -75,6 +75,26 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 		// Absorbs Neovim's post-handshake notification
 		Initialized: func(context *glsp.Context, params *protocol.InitializedParams) error {
 			sState.Log("LSP client handshake completed successfully!")
+
+			watchers := []protocol.FileSystemWatcher{
+				{GlobPattern: "**/*.md"},
+				{GlobPattern: "**/*.markdown"},
+			}
+			regParams := protocol.RegistrationParams{
+				Registrations: []protocol.Registration{
+					{
+						ID:     "xsmd-file-watcher",
+						Method: "workspace/didChangeWatchedFiles",
+						RegisterOptions: protocol.DidChangeWatchedFilesRegistrationOptions{
+							Watchers: watchers,
+						},
+					},
+				},
+			}
+
+			var result any
+			context.Call("client/registerCapability", regParams, &result)
+
 			return nil
 		},
 
@@ -315,11 +335,13 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 
 				switch change.Type {
 				case protocol.FileChangeTypeCreated, protocol.FileChangeTypeChanged:
+					sState.Log(fmt.Sprintf("File watch event: Created/Changed %s", path))
 					err := sState.ParseAndIndexFile(uri, path)
 					if err != nil {
 						log.Printf("Failed to parse watched file %s: %v", path, err)
 					}
 				case protocol.FileChangeTypeDeleted:
+					sState.Log(fmt.Sprintf("File watch event: Deleted %s", path))
 					delete(sState.Index, uri)
 					delete(sState.ProcessedRenames, state.CleanURIPath(uri))
 				}
