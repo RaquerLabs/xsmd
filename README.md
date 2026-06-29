@@ -30,6 +30,26 @@ debug = false
 ignore = []
 ```
 
+### Neovim Setup
+
+To ensure Neovim launches a single `xsmd` process and correctly shares/reuses it across all open Markdown buffers, configure the server with a dynamically resolved `root_dir`, specify `name = "xsmd"`, and disable `single_file_support`:
+
+```lua
+local lsp_config = {
+  name = "xsmd",
+  cmd = { "xsmd" },
+  filetypes = { "markdown" },
+  -- Dynamically resolve the workspace root per-buffer
+  root_dir = function(filepath)
+    return vim.fs.root(filepath, { "xsmd.toml", ".git" })
+  end,
+  -- Prevent spawning a process per file/buffer if no root is detected
+  single_file_support = false,
+  -- ... on_attach, capabilities, settings
+}
+vim.lsp.start(lsp_config)
+```
+
 ### Commands
 
 The server provides a list of commands for debug:
@@ -45,6 +65,9 @@ The server provides a list of commands for debug:
 - Workspace Crawling:
   Scans your vault on boot,
   locates the project root via the anchor file `xsmd.toml`.
+- Workspace File Watching:
+  Dynamically registers filesystem watchers for Markdown files (`**/*.md`, `**/*.markdown`)
+  to automatically keep the in-memory database in sync when files are changed externally.
 - Go to Definition:
   - Links starting with `/` (e.g., `[Link](/docs/file.md)`) are resolved relative to the workspace root.
   - Links not starting with `/` (e.g., `[Link](../file.md)`) are resolved relative to the current file's folder.
@@ -57,7 +80,8 @@ The server provides a list of commands for debug:
     Filtering out files that don't have `# H1 Title` headers.
   - Typing `[` autocompletes with note names, adding the folder-relative `[Title Text](../path/to/note.md)` snippet.
   - Typing `(` inside a link (e.g., `[Label](`) autocompletes with paths, also adds the folder-relative snippet.
-- Rename
+- Rename:
+  Moves files and automatically updates all reference links across the workspace.
 
 ## How It Works Under the Hood
 

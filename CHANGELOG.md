@@ -7,10 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
-### Todo
-
 ### Added
 
+- Register `workspace/didChangeWatchedFiles` with the client to automatically keep the in-memory index in sync with external changes.
+- Added trace logging in `xsmd.log` for file watcher create, change, and delete events.
 - Consolidated duplicate link lookup algorithm into a centralized `parser.FindLinkAtPosition` helper.
 - Refactored duplicated line offset table calculations into a unified `parser.LineOffsetTable` helper.
 - Standardized path resolution and URI cleaning helper functions into a new `internal/state/path.go` (methods `CleanURIPath` and `ResolveLinkPath`).

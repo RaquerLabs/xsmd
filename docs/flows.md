@@ -89,3 +89,30 @@ the `ResolveLinkPath` and `CleanURIPath` helper methods in
   - Supports two trigger patterns:
     - `[`
     - `(` inside an existing link (e.g., `[Label](`)
+
+## Real-Time Workspace Synchronization
+
+For external file changes, the server dynamically registers a filesystem watcher to keep its index completely in sync:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor External as External Process / Git
+    participant Editor as IDE (Neovim)
+    participant Server as LSP Handlers
+    participant State as State Index
+
+    Note over Editor,Server: During handshake / initialization (async goroutine)
+    Server->>Editor: Request: client/registerCapability (workspace/didChangeWatchedFiles)
+    Editor-->>Server: Response: Registration success
+
+    Note over External,Editor: External file change occurs
+    External->>Editor: Create / Modify / Delete file on disk
+    Editor->>Server: Notification: workspace/didChangeWatchedFiles (Changes)
+
+    alt File Created or Modified
+        Server->>State: Parse and index file
+    else File Deleted
+        Server->>State: Remove file from state index & processed renames cache
+    end
+```
