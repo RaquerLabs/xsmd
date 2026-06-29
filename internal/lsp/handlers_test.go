@@ -1045,3 +1045,37 @@ func TestTextDocumentCompletionFuzzyOutOfOrder(t *testing.T) {
 		t.Errorf("expected completion item 'File Two', got '%s'", items[0].Label)
 	}
 }
+
+func TestWorkspaceExecuteCommandDumpState(t *testing.T) {
+	s := setupTestState()
+	handler := BuildHandler(s)
+
+	var loggedMsg string
+	s.DebugLog = func(msg string) {
+		loggedMsg = msg
+	}
+
+	params := &protocol.ExecuteCommandParams{
+		Command: "xsmd.dumpState",
+	}
+
+	res, err := handler.WorkspaceExecuteCommand(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	resStr, ok := res.(string)
+	if !ok {
+		t.Fatalf("expected string result, got %T", res)
+	}
+
+	if resStr != "State dumped to xsmd.log" {
+		t.Errorf("expected result 'State dumped to xsmd.log', got '%s'", resStr)
+	}
+
+	if !strings.Contains(loggedMsg, "file:///workspace/file1.md") ||
+		!strings.Contains(loggedMsg, "file:///workspace/file2.md") ||
+		!strings.Contains(loggedMsg, "file:///workspace/sub/file3.md") {
+		t.Errorf("logged message did not contain expected file URIs. Got: '%s'", loggedMsg)
+	}
+}

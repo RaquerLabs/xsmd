@@ -1,0 +1,2 @@
+# Enable verbose debug logs printed to xsmd.log
+debug = false

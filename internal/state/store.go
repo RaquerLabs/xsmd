@@ -23,12 +23,33 @@ type ServerState struct {
 	Mu            sync.RWMutex
 	WorkspaceRoot string
 	Index         map[string]*DocumentInfo
+	Debug         bool
+	DebugLog      func(string)
 }
 
 // NewServerState creates a new empty ServerState
 func NewServerState() *ServerState {
 	return &ServerState{
 		Index: make(map[string]*DocumentInfo),
+	}
+}
+
+// Log prints a message using the configured DebugLog if Debug is enabled
+func (s *ServerState) Log(msg string) {
+	s.Mu.RLock()
+	debug := s.Debug
+	debugLog := s.DebugLog
+	s.Mu.RUnlock()
+
+	if debug && debugLog != nil {
+		debugLog(msg)
+	}
+}
+
+// LogNoLock prints a message using the configured DebugLog if Debug is enabled, without acquiring any locks
+func (s *ServerState) LogNoLock(msg string) {
+	if s.Debug && s.DebugLog != nil {
+		s.DebugLog(msg)
 	}
 }
 
