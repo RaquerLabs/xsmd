@@ -1079,3 +1079,44 @@ func TestWorkspaceExecuteCommandDumpState(t *testing.T) {
 		t.Errorf("logged message did not contain expected file URIs. Got: '%s'", loggedMsg)
 	}
 }
+
+func TestTextDocumentCompletionIgnoreDirs(t *testing.T) {
+	s := setupTestState()
+	s.IgnoreDirs = []string{"/sub"}
+	handler := BuildHandler(s)
+
+	params := &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/file1.md",
+			},
+			Position: protocol.Position{
+				Line:      3,
+				Character: 1, // cursor after the "["
+			},
+		},
+	}
+
+	res, err := handler.TextDocumentCompletion(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	list, ok := res.(protocol.CompletionList)
+	if !ok {
+		t.Fatalf("expected protocol.CompletionList, got %T", res)
+	}
+
+	// In setupTestState:
+	// file1.md itself is skipped (cannot suggest itself).
+	// file2.md is at "/workspace/file2.md" (relative: "file2.md"). Not ignored.
+	// sub/file3.md is at "/workspace/sub/file3.md" (relative: "sub/file3.md"). Ignored because relative path starts with "sub/".
+	// Therefore, we only expect 1 item: "File Two".
+	if len(list.Items) != 1 {
+		t.Fatalf("expected 1 item, got %d", len(list.Items))
+	}
+
+	if list.Items[0].Label != "File Two" {
+		t.Errorf("expected item 'File Two', got '%s'", list.Items[0].Label)
+	}
+}

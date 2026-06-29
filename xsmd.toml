@@ -1,2 +1,6 @@
 # Enable verbose debug logs printed to xsmd.log
 debug = false
+
+# Folders to ignore during autocomplete. Paths must start from the project root directory.
+# Example: ignore = ["/journal", "/templates/daily"]
+ignore = []

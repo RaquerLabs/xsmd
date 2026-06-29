@@ -25,6 +25,7 @@ type ServerState struct {
 	Index         map[string]*DocumentInfo
 	Debug         bool
 	DebugLog      func(string)
+	IgnoreDirs    []string
 }
 
 // NewServerState creates a new empty ServerState

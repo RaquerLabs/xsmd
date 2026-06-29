@@ -79,6 +79,12 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 		}
 
 		absPath := strings.TrimPrefix(uri, "file://")
+		relToRoot, err := filepath.Rel(state.WorkspaceRoot, absPath)
+		if err == nil && state.IsIgnored(relToRoot) {
+			state.LogNoLock(fmt.Sprintf("HandleTextDocumentCompletion: Skipping ignored document '%s'", uri))
+			continue
+		}
+
 		sourceAbsPath := strings.TrimPrefix(params.TextDocument.URI, "file://")
 		sourceDir := filepath.Dir(sourceAbsPath)
 		relPath, err := filepath.Rel(sourceDir, absPath)
