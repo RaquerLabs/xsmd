@@ -20,18 +20,20 @@ type DocumentInfo struct {
 
 // ServerState manages your global workspace memory
 type ServerState struct {
-	Mu            sync.RWMutex
-	WorkspaceRoot string
-	Index         map[string]*DocumentInfo
-	Debug         bool
-	DebugLog      func(string)
-	IgnoreDirs    []string
+	Mu               sync.RWMutex
+	WorkspaceRoot    string
+	Index            map[string]*DocumentInfo
+	Debug            bool
+	DebugLog         func(string)
+	IgnoreDirs       []string
+	ProcessedRenames map[string]string // Maps OldURI -> NewURI to avoid redundant workspaceWillRename updates
 }
 
 // NewServerState creates a new empty ServerState
 func NewServerState() *ServerState {
 	return &ServerState{
-		Index: make(map[string]*DocumentInfo),
+		Index:            make(map[string]*DocumentInfo),
+		ProcessedRenames: make(map[string]string),
 	}
 }
 
