@@ -46,6 +46,8 @@ graph TD
 - [internal/state/crawler.go](/internal/state/crawler.go):
   Anchors project roots by finding `xsmd.toml`
   and climbs the directory tree finding files.
+- [internal/state/config.go](/internal/state/config.go):
+  Parses `xsmd.toml` configuration options (such as debug mode and ignored directories).
 - [internal/parser/markdown.go](/internal/parser/markdown.go):
   Converts raw Markdown text into an Abstract Syntax Tree (AST),
   extracting titles and character spans of notes.

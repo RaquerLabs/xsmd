@@ -16,6 +16,30 @@ If you're on windows:
 iwr https://raw.githubusercontent.com/RaquerLabs/xsmd/main/install.ps1 | iex
 ```
 
+## Configuration
+
+The LSP server looks for an `xsmd.toml` file at the root of your project.
+You can configure the following options in it:
+
+```toml
+# Enable verbose debug logs printed to xsmd.log
+debug = false
+
+# Folders to ignore during autocomplete. Paths must start from the project root directory.
+# For example, "/journal" will ignore everything in "/journal/*"
+ignore = []
+```
+
+### Commands
+
+The server provides a list of commands for debug:
+
+- `xsmd.dumpState`: Outputs a list of all current indexed document keys to `xsmd.log`.
+  In Neovim, you can run this with:
+  ```plaintext
+  :XsmdDump
+  ```
+
 ## Features Implemented
 
 - Workspace Crawling:
