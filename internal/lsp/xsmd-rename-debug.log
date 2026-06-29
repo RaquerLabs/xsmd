@@ -1,0 +1,160 @@
+[16:04:54.420] HandleTextDocumentRename called: URI=file:///workspace/file1.md, line=2, char=15, NewName=new_file2.md
+[16:04:54.420] TextDocumentRename tracking rename in ProcessedRenames: /workspace/file2.md -> /workspace/new_file2.md
+[16:04:54.420] HandleWorkspaceWillRenameFiles called with 1 files
+[16:04:54.420] File rename entry: OldURI=file:///workspace/file2.md, NewURI=file:///workspace/new_file2.md
+[16:04:54.420] Cleaned paths: oldAbs=/workspace/file2.md, newAbs=/workspace/new_file2.md
+[16:04:54.420] Lookup in ProcessedRenames: key=/workspace/file2.md, exists=false, val=
+[16:04:54.420] Tracking rename in ProcessedRenames: /workspace/file2.md -> /workspace/new_file2.md
+[16:04:54.420] HandleTextDocumentRename called: URI=file:///workspace/file1.md, line=2, char=15, NewName=new_file2.md
+[16:04:54.420] TextDocumentRename tracking rename in ProcessedRenames: /workspace/file2.md -> /workspace/new_file2.md
+[16:04:54.420] HandleWorkspaceWillRenameFiles called with 1 files
+[16:04:54.420] File rename entry: OldURI=file:///workspace/file2.md, NewURI=file:///workspace/new_file2.md
+[16:04:54.420] Cleaned paths: oldAbs=/workspace/file2.md, newAbs=/workspace/new_file2.md
+[16:04:54.420] Lookup in ProcessedRenames: key=/workspace/file2.md, exists=true, val=/workspace/new_file2.md
+[16:04:54.420] Match found in ProcessedRenames, ignoring rename for /workspace/file2.md
+[16:04:54.420] HandleWorkspaceWillRenameFiles called with 1 files
+[16:04:54.420] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-oi.md
+[16:04:54.420] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-oi.md
+[16:04:54.420] Lookup in ProcessedRenames: key=/workspace/test.md, exists=false, val=
+[16:04:54.420] Tracking rename in ProcessedRenames: /workspace/test.md -> /workspace/test-oi.md
+[16:04:54.420] HandleWorkspaceWillRenameFiles called with 1 files
+[16:04:54.420] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-oi.md
+[16:04:54.420] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-oi.md
+[16:04:54.420] Lookup in ProcessedRenames: key=/workspace/test.md, exists=true, val=/workspace/test-oi.md
+[16:04:54.420] Match found in ProcessedRenames, ignoring rename for /workspace/test.md
+[16:04:54.420] HandleWorkspaceWillRenameFiles called with 1 files
+[16:04:54.420] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-hello.md
+[16:04:54.420] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-hello.md
+[16:04:54.420] Lookup in ProcessedRenames: key=/workspace/test.md, exists=false, val=
+[16:04:54.420] Tracking rename in ProcessedRenames: /workspace/test.md -> /workspace/test-hello.md
+[16:04:54.420] HandleTextDocumentRename called: URI=file:///workspace/ref.md, line=0, char=12, NewName=test-hello.md
+[16:04:54.420] TextDocumentRename tracking rename in ProcessedRenames: /workspace/test.md -> /workspace/test-hello.md
+[16:04:54.420] HandleWorkspaceWillRenameFiles called with 1 files
+[16:04:54.420] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-hello.md
+[16:04:54.420] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-hello.md
+[16:04:54.420] Lookup in ProcessedRenames: key=/workspace/test.md, exists=false, val=
+[16:04:54.421] Tracking rename in ProcessedRenames: /workspace/test.md -> /workspace/test-hello.md
+[16:04:54.421] HandleTextDocumentRename called: URI=file:///workspace/sub/file4.md, line=2, char=20, NewName=new_file2.md
+[16:04:54.421] TextDocumentRename tracking rename in ProcessedRenames: /workspace/file2.md -> /workspace/new_file2.md
+[16:16:33.152][PID:658580] HandleTextDocumentRename called: URI=file:///workspace/file1.md, line=2, char=15, NewName=new_file2.md
+[16:16:33.152][PID:658580] TextDocumentRename tracking rename in ProcessedRenames: /workspace/file2.md -> /workspace/new_file2.md
+[16:16:33.152][PID:658580] HandleWorkspaceWillRenameFiles called with 1 files
+[16:16:33.152][PID:658580] File rename entry: OldURI=file:///workspace/file2.md, NewURI=file:///workspace/new_file2.md
+[16:16:33.152][PID:658580] Cleaned paths: oldAbs=/workspace/file2.md, newAbs=/workspace/new_file2.md
+[16:16:33.152][PID:658580] Lookup in ProcessedRenames: key=/workspace/file2.md, exists=false, val=
+[16:16:33.152][PID:658580] Tracking rename in ProcessedRenames: /workspace/file2.md -> /workspace/new_file2.md
+[16:16:33.152][PID:658580] HandleTextDocumentRename called: URI=file:///workspace/file1.md, line=2, char=15, NewName=new_file2.md
+[16:16:33.152][PID:658580] TextDocumentRename tracking rename in ProcessedRenames: /workspace/file2.md -> /workspace/new_file2.md
+[16:16:33.152][PID:658580] HandleWorkspaceWillRenameFiles called with 1 files
+[16:16:33.152][PID:658580] File rename entry: OldURI=file:///workspace/file2.md, NewURI=file:///workspace/new_file2.md
+[16:16:33.152][PID:658580] Cleaned paths: oldAbs=/workspace/file2.md, newAbs=/workspace/new_file2.md
+[16:16:33.152][PID:658580] Lookup in ProcessedRenames: key=/workspace/file2.md, exists=true, val=/workspace/new_file2.md
+[16:16:33.152][PID:658580] Match found in ProcessedRenames, ignoring rename for /workspace/file2.md
+[16:16:33.152][PID:658580] HandleWorkspaceWillRenameFiles called with 1 files
+[16:16:33.152][PID:658580] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-oi.md
+[16:16:33.152][PID:658580] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-oi.md
+[16:16:33.152][PID:658580] Lookup in ProcessedRenames: key=/workspace/test.md, exists=false, val=
+[16:16:33.152][PID:658580] Tracking rename in ProcessedRenames: /workspace/test.md -> /workspace/test-oi.md
+[16:16:33.152][PID:658580] HandleWorkspaceWillRenameFiles called with 1 files
+[16:16:33.153][PID:658580] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-oi.md
+[16:16:33.153][PID:658580] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-oi.md
+[16:16:33.153][PID:658580] Lookup in ProcessedRenames: key=/workspace/test.md, exists=true, val=/workspace/test-oi.md
+[16:16:33.153][PID:658580] Match found in ProcessedRenames, ignoring rename for /workspace/test.md
+[16:16:33.153][PID:658580] HandleWorkspaceWillRenameFiles called with 1 files
+[16:16:33.153][PID:658580] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-hello.md
+[16:16:33.153][PID:658580] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-hello.md
+[16:16:33.153][PID:658580] Lookup in ProcessedRenames: key=/workspace/test.md, exists=false, val=
+[16:16:33.153][PID:658580] Tracking rename in ProcessedRenames: /workspace/test.md -> /workspace/test-hello.md
+[16:16:33.153][PID:658580] HandleTextDocumentRename called: URI=file:///workspace/ref.md, line=0, char=12, NewName=test-hello.md
+[16:16:33.153][PID:658580] TextDocumentRename tracking rename in ProcessedRenames: /workspace/test.md -> /workspace/test-hello.md
+[16:16:33.153][PID:658580] HandleWorkspaceWillRenameFiles called with 1 files
+[16:16:33.153][PID:658580] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-hello.md
+[16:16:33.153][PID:658580] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-hello.md
+[16:16:33.153][PID:658580] Lookup in ProcessedRenames: key=/workspace/test.md, exists=false, val=
+[16:16:33.153][PID:658580] Tracking rename in ProcessedRenames: /workspace/test.md -> /workspace/test-hello.md
+[16:16:33.153][PID:658580] HandleTextDocumentRename called: URI=file:///workspace/sub/file4.md, line=2, char=20, NewName=new_file2.md
+[16:16:33.153][PID:658580] TextDocumentRename tracking rename in ProcessedRenames: /workspace/file2.md -> /workspace/new_file2.md
+[16:17:03.466][PID:659511] HandleTextDocumentRename called: URI=file:///workspace/file1.md, line=2, char=15, NewName=new_file2.md
+[16:17:03.466][PID:659511] TextDocumentRename tracking rename in ProcessedRenames: /workspace/file2.md -> /workspace/new_file2.md
+[16:17:03.466][PID:659511] checkAndTrackRenameProcessShared: Created lock file /tmp/xsmd-rename-1747f4b3c0c47f3b0427fa5bb9740576739df605a3a2c494630ffcc11980734a.lock
+[16:17:03.466][PID:659511] HandleWorkspaceWillRenameFiles called with 1 files
+[16:17:03.466][PID:659511] File rename entry: OldURI=file:///workspace/file2.md, NewURI=file:///workspace/new_file2.md
+[16:17:03.466][PID:659511] Cleaned paths: oldAbs=/workspace/file2.md, newAbs=/workspace/new_file2.md
+[16:17:03.466][PID:659511] Lookup in ProcessedRenames: key=/workspace/file2.md, exists=false, val=
+[16:17:03.466][PID:659511] checkAndTrackRenameProcessShared: Lock file /tmp/xsmd-rename-1747f4b3c0c47f3b0427fa5bb9740576739df605a3a2c494630ffcc11980734a.lock is recent (age: 476.579µs), ignoring
+[16:17:03.466][PID:659511] Match found in process-shared lock file, ignoring rename for /workspace/file2.md
+[16:17:03.466][PID:659511] HandleTextDocumentRename called: URI=file:///workspace/file1.md, line=2, char=15, NewName=new_file2.md
+[16:17:03.466][PID:659511] TextDocumentRename tracking rename in ProcessedRenames: /workspace/file2.md -> /workspace/new_file2.md
+[16:17:03.466][PID:659511] checkAndTrackRenameProcessShared: Lock file /tmp/xsmd-rename-1747f4b3c0c47f3b0427fa5bb9740576739df605a3a2c494630ffcc11980734a.lock is recent (age: 682.939µs), ignoring
+[16:17:03.466][PID:659511] HandleWorkspaceWillRenameFiles called with 1 files
+[16:17:03.466][PID:659511] File rename entry: OldURI=file:///workspace/file2.md, NewURI=file:///workspace/new_file2.md
+[16:17:03.466][PID:659511] Cleaned paths: oldAbs=/workspace/file2.md, newAbs=/workspace/new_file2.md
+[16:17:03.466][PID:659511] Lookup in ProcessedRenames: key=/workspace/file2.md, exists=true, val=/workspace/new_file2.md
+[16:17:03.466][PID:659511] Match found in ProcessedRenames, ignoring rename for /workspace/file2.md
+[16:17:03.467][PID:659511] HandleWorkspaceWillRenameFiles called with 1 files
+[16:17:03.467][PID:659511] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-oi.md
+[16:17:03.467][PID:659511] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-oi.md
+[16:17:03.467][PID:659511] Lookup in ProcessedRenames: key=/workspace/test.md, exists=false, val=
+[16:17:03.467][PID:659511] checkAndTrackRenameProcessShared: Created lock file /tmp/xsmd-rename-74f52108ecdd69d66c16941ee3ae1c9b49863aae0cdf126aad435de142eb7088.lock
+[16:17:03.467][PID:659511] Tracking rename in ProcessedRenames: /workspace/test.md -> /workspace/test-oi.md
+[16:17:03.467][PID:659511] HandleWorkspaceWillRenameFiles called with 1 files
+[16:17:03.467][PID:659511] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-oi.md
+[16:17:03.467][PID:659511] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-oi.md
+[16:17:03.467][PID:659511] Lookup in ProcessedRenames: key=/workspace/test.md, exists=true, val=/workspace/test-oi.md
+[16:17:03.467][PID:659511] Match found in ProcessedRenames, ignoring rename for /workspace/test.md
+[16:17:03.467][PID:659511] HandleWorkspaceWillRenameFiles called with 1 files
+[16:17:03.467][PID:659511] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-hello.md
+[16:17:03.467][PID:659511] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-hello.md
+[16:17:03.467][PID:659511] Lookup in ProcessedRenames: key=/workspace/test.md, exists=false, val=
+[16:17:03.467][PID:659511] checkAndTrackRenameProcessShared: Created lock file /tmp/xsmd-rename-1e5617f2f92760e4253b12e22d82308fb7d124d14d5a26f2f241664d61550d86.lock
+[16:17:03.467][PID:659511] Tracking rename in ProcessedRenames: /workspace/test.md -> /workspace/test-hello.md
+[16:17:03.467][PID:659511] HandleTextDocumentRename called: URI=file:///workspace/ref.md, line=0, char=12, NewName=test-hello.md
+[16:17:03.467][PID:659511] TextDocumentRename tracking rename in ProcessedRenames: /workspace/test.md -> /workspace/test-hello.md
+[16:17:03.467][PID:659511] checkAndTrackRenameProcessShared: Lock file /tmp/xsmd-rename-1e5617f2f92760e4253b12e22d82308fb7d124d14d5a26f2f241664d61550d86.lock is recent (age: 1.337956ms), ignoring
+[16:17:03.467][PID:659511] HandleWorkspaceWillRenameFiles called with 1 files
+[16:17:03.467][PID:659511] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-hello.md
+[16:17:03.467][PID:659511] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-hello.md
+[16:17:03.467][PID:659511] Lookup in ProcessedRenames: key=/workspace/test.md, exists=false, val=
+[16:17:03.467][PID:659511] checkAndTrackRenameProcessShared: Lock file /tmp/xsmd-rename-1e5617f2f92760e4253b12e22d82308fb7d124d14d5a26f2f241664d61550d86.lock is recent (age: 1.462491ms), ignoring
+[16:17:03.467][PID:659511] Match found in process-shared lock file, ignoring rename for /workspace/test.md
+[16:17:03.468][PID:659511] HandleTextDocumentRename called: URI=file:///workspace/sub/file4.md, line=2, char=20, NewName=new_file2.md
+[16:17:03.468][PID:659511] TextDocumentRename tracking rename in ProcessedRenames: /workspace/file2.md -> /workspace/new_file2.md
+[16:17:03.468][PID:659511] checkAndTrackRenameProcessShared: Lock file /tmp/xsmd-rename-1747f4b3c0c47f3b0427fa5bb9740576739df605a3a2c494630ffcc11980734a.lock is recent (age: 1.982888ms), ignoring
+[16:18:49.827][PID:661901] HandleTextDocumentRename called: URI=file:///workspace/file1.md, line=2, char=15, NewName=new_file2.md
+[16:18:49.827][PID:661901] TextDocumentRename tracking rename in ProcessedRenames: /workspace/file2.md -> /workspace/new_file2.md
+[16:18:49.827][PID:661901] HandleWorkspaceWillRenameFiles called with 1 files
+[16:18:49.827][PID:661901] File rename entry: OldURI=file:///workspace/file2.md, NewURI=file:///workspace/new_file2.md
+[16:18:49.827][PID:661901] Cleaned paths: oldAbs=/workspace/file2.md, newAbs=/workspace/new_file2.md
+[16:18:49.827][PID:661901] Lookup in ProcessedRenames: key=/workspace/file2.md, exists=false, val=
+[16:18:49.827][PID:661901] Tracking rename in ProcessedRenames: /workspace/file2.md -> /workspace/new_file2.md
+[16:18:49.828][PID:661901] HandleTextDocumentRename called: URI=file:///workspace/file1.md, line=2, char=15, NewName=new_file2.md
+[16:18:49.828][PID:661901] TextDocumentRename tracking rename in ProcessedRenames: /workspace/file2.md -> /workspace/new_file2.md
+[16:18:49.828][PID:661901] HandleWorkspaceWillRenameFiles called with 1 files
+[16:18:49.828][PID:661901] File rename entry: OldURI=file:///workspace/file2.md, NewURI=file:///workspace/new_file2.md
+[16:18:49.828][PID:661901] Cleaned paths: oldAbs=/workspace/file2.md, newAbs=/workspace/new_file2.md
+[16:18:49.828][PID:661901] Lookup in ProcessedRenames: key=/workspace/file2.md, exists=true, val=/workspace/new_file2.md
+[16:18:49.828][PID:661901] Match found in ProcessedRenames, ignoring rename for /workspace/file2.md
+[16:18:49.828][PID:661901] HandleWorkspaceWillRenameFiles called with 1 files
+[16:18:49.828][PID:661901] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-oi.md
+[16:18:49.828][PID:661901] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-oi.md
+[16:18:49.828][PID:661901] Lookup in ProcessedRenames: key=/workspace/test.md, exists=false, val=
+[16:18:49.828][PID:661901] Tracking rename in ProcessedRenames: /workspace/test.md -> /workspace/test-oi.md
+[16:18:49.828][PID:661901] HandleWorkspaceWillRenameFiles called with 1 files
+[16:18:49.828][PID:661901] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-oi.md
+[16:18:49.828][PID:661901] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-oi.md
+[16:18:49.828][PID:661901] Lookup in ProcessedRenames: key=/workspace/test.md, exists=true, val=/workspace/test-oi.md
+[16:18:49.828][PID:661901] Match found in ProcessedRenames, ignoring rename for /workspace/test.md
+[16:18:49.828][PID:661901] HandleWorkspaceWillRenameFiles called with 1 files
+[16:18:49.828][PID:661901] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-hello.md
+[16:18:49.828][PID:661901] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-hello.md
+[16:18:49.828][PID:661901] Lookup in ProcessedRenames: key=/workspace/test.md, exists=false, val=
+[16:18:49.828][PID:661901] Tracking rename in ProcessedRenames: /workspace/test.md -> /workspace/test-hello.md
+[16:18:49.828][PID:661901] HandleTextDocumentRename called: URI=file:///workspace/ref.md, line=0, char=12, NewName=test-hello.md
+[16:18:49.828][PID:661901] TextDocumentRename tracking rename in ProcessedRenames: /workspace/test.md -> /workspace/test-hello.md
+[16:18:49.828][PID:661901] HandleWorkspaceWillRenameFiles called with 1 files
+[16:18:49.828][PID:661901] File rename entry: OldURI=file:///workspace/test.md, NewURI=file:///workspace/test-hello.md
+[16:18:49.828][PID:661901] Cleaned paths: oldAbs=/workspace/test.md, newAbs=/workspace/test-hello.md
+[16:18:49.828][PID:661901] Lookup in ProcessedRenames: key=/workspace/test.md, exists=false, val=
+[16:18:49.828][PID:661901] Tracking rename in ProcessedRenames: /workspace/test.md -> /workspace/test-hello.md
+[16:18:49.828][PID:661901] HandleTextDocumentRename called: URI=file:///workspace/sub/file4.md, line=2, char=20, NewName=new_file2.md
+[16:18:49.828][PID:661901] TextDocumentRename tracking rename in ProcessedRenames: /workspace/file2.md -> /workspace/new_file2.md

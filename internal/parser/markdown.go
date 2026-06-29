@@ -12,8 +12,9 @@ import (
 
 // ExtractedLink stores information about the links found in documents
 type ExtractedLink struct {
-	Path  string
-	Range protocol.Range
+	Path      string
+	Range     protocol.Range
+	PathRange protocol.Range
 }
 
 // ParseMarkdown parses raw byte arrays and extracts links and headings.
@@ -52,6 +53,8 @@ func ParseMarkdown(uri string, content []byte) (ast.Node, []ExtractedLink, strin
 
 			var startLine, endLine uint32
 			var startChar, endChar uint32
+			var pathStartLine, pathEndLine uint32
+			var pathStartChar, pathEndChar uint32
 
 			pattern := "](" + destPath + ")"
 			idx := -1
@@ -73,6 +76,14 @@ func ParseMarkdown(uri string, content []byte) (ast.Node, []ExtractedLink, strin
 				startChar = uint32(startByte - lineOffsets[startLine])
 				endChar = uint32(endByte - lineOffsets[endLine])
 
+				pathStartByte := absPatternStart + 2
+				pathEndByte := pathStartByte + len(destPath)
+
+				pathStartLine = getLineFromOffset(pathStartByte)
+				pathEndLine = getLineFromOffset(pathEndByte)
+				pathStartChar = uint32(pathStartByte - lineOffsets[pathStartLine])
+				pathEndChar = uint32(pathEndByte - lineOffsets[pathEndLine])
+
 				searchFrom = endByte
 			} else {
 				// Fallback to parent block line range
@@ -88,6 +99,10 @@ func ParseMarkdown(uri string, content []byte) (ast.Node, []ExtractedLink, strin
 				}
 				startChar = 0
 				endChar = 999
+				pathStartLine = startLine
+				pathEndLine = endLine
+				pathStartChar = startChar
+				pathEndChar = endChar
 			}
 
 			extractedLinks = append(extractedLinks, ExtractedLink{
@@ -95,6 +110,10 @@ func ParseMarkdown(uri string, content []byte) (ast.Node, []ExtractedLink, strin
 				Range: protocol.Range{
 					Start: protocol.Position{Line: startLine, Character: startChar},
 					End:   protocol.Position{Line: endLine, Character: endChar},
+				},
+				PathRange: protocol.Range{
+					Start: protocol.Position{Line: pathStartLine, Character: pathStartChar},
+					End:   protocol.Position{Line: pathEndLine, Character: pathEndChar},
 				},
 			})
 		}

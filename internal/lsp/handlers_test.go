@@ -11,6 +11,10 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
+func init() {
+	DisableProcessSharedLock = true
+}
+
 func setupTestState() *state.ServerState {
 	s := state.NewServerState()
 	s.WorkspaceRoot = "/workspace"
@@ -496,6 +500,271 @@ func TestWorkspaceWillRenameFiles(t *testing.T) {
 	te := edits[0]
 	if !strings.Contains(te.NewText, "new_file2.md") {
 		t.Errorf("expected updated text to contain 'new_file2.md', got '%s'", te.NewText)
+	}
+}
+
+func TestRenameExactRangeAndTracking(t *testing.T) {
+	s := setupTestState()
+	handler := BuildHandler(s)
+
+	params := &protocol.RenameParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/file1.md",
+			},
+			Position: protocol.Position{
+				Line:      2,
+				Character: 15, // inside the [File Two](file2.md) link
+			},
+		},
+		NewName: "new_file2.md",
+	}
+
+	res, err := handler.TextDocumentRename(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if res == nil {
+		t.Fatal("expected non-nil WorkspaceEdit")
+	}
+
+	// Verify exact range edits
+	var textEdit *protocol.TextEdit
+	for _, change := range res.DocumentChanges {
+		if op, ok := change.(protocol.TextDocumentEdit); ok {
+			if op.TextDocument.URI == "file:///workspace/file1.md" {
+				if len(op.Edits) != 1 {
+					t.Fatalf("expected 1 edit in file1.md, got %d", len(op.Edits))
+				}
+				te := op.Edits[0].(protocol.TextEdit)
+				textEdit = &te
+			}
+		}
+	}
+
+	if textEdit == nil {
+		t.Fatal("expected text edit for file1.md")
+	}
+
+	// Expect range starting at character 21 and ending at 29 (the path "file2.md" on line 2)
+	if textEdit.Range.Start.Line != 2 || textEdit.Range.Start.Character != 21 {
+		t.Errorf("expected Start line 2 character 21, got %v", textEdit.Range.Start)
+	}
+	if textEdit.Range.End.Line != 2 || textEdit.Range.End.Character != 29 {
+		t.Errorf("expected End line 2 character 29, got %v", textEdit.Range.End)
+	}
+	if textEdit.NewText != "new_file2.md" {
+		t.Errorf("expected NewText 'new_file2.md', got '%s'", textEdit.NewText)
+	}
+
+	// Check that s.ProcessedRenames has the entry
+	s.Mu.RLock()
+	val, ok := s.ProcessedRenames["/workspace/file2.md"]
+	s.Mu.RUnlock()
+	if !ok || val != "/workspace/new_file2.md" {
+		t.Errorf("expected ProcessedRenames entry '/workspace/file2.md' -> '/workspace/new_file2.md', got '%s'", val)
+	}
+
+	// Now simulate the workspaceWillRenameFiles trigger
+	willRenameParams := &protocol.RenameFilesParams{
+		Files: []protocol.FileRename{
+			{
+				OldURI: "file:///workspace/file2.md",
+				NewURI: "file:///workspace/new_file2.md",
+			},
+		},
+	}
+
+	resWillRename, err := handler.WorkspaceWillRenameFiles(nil, willRenameParams)
+	if err != nil {
+		t.Fatalf("unexpected error during willRenameFiles: %v", err)
+	}
+
+	// Should be empty because it was ignored
+	if len(resWillRename.Changes) > 0 {
+		t.Errorf("expected no changes because rename was already handled, got: %v", resWillRename.Changes)
+	}
+}
+
+func TestDuplicateWorkspaceWillRenameFiles(t *testing.T) {
+	s := state.NewServerState()
+	s.WorkspaceRoot = "/workspace"
+	_ = s.ParseAndIndexContent("file:///workspace/ref.md", []byte(`[testing](test.md)`))
+	_ = s.ParseAndIndexContent("file:///workspace/test.md", []byte(`# Test`))
+
+	handler := BuildHandler(s)
+
+	params := &protocol.RenameFilesParams{
+		Files: []protocol.FileRename{
+			{
+				OldURI: "file:///workspace/test.md",
+				NewURI: "file:///workspace/test-oi.md",
+			},
+		},
+	}
+
+	// First call to WorkspaceWillRenameFiles
+	res1, err := handler.WorkspaceWillRenameFiles(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error on first call: %v", err)
+	}
+
+	edits1, ok := res1.Changes["file:///workspace/ref.md"]
+	if !ok || len(edits1) != 1 {
+		t.Fatalf("expected 1 edit in ref.md on first call, got %d", len(edits1))
+	}
+	if edits1[0].NewText != "test-oi.md" {
+		t.Errorf("expected 'test-oi.md', got '%s'", edits1[0].NewText)
+	}
+
+	// Second (duplicate/consecutive) call to WorkspaceWillRenameFiles before watched file event
+	res2, err := handler.WorkspaceWillRenameFiles(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error on second call: %v", err)
+	}
+
+	// Should be empty/ignored because we already registered/processed it
+	if len(res2.Changes) > 0 {
+		t.Errorf("expected no changes on duplicate/consecutive call, got: %v", res2.Changes)
+	}
+}
+
+func TestUserReportedRenameBug(t *testing.T) {
+	s := state.NewServerState()
+	s.WorkspaceRoot = "/workspace"
+	_ = s.ParseAndIndexContent("file:///workspace/ref.md", []byte(`[testing](test.md)`))
+	_ = s.ParseAndIndexContent("file:///workspace/test.md", []byte(`# Test`))
+
+	handler := BuildHandler(s)
+
+	params := &protocol.RenameFilesParams{
+		Files: []protocol.FileRename{
+			{
+				OldURI: "file:///workspace/test.md",
+				NewURI: "file:///workspace/test-hello.md",
+			},
+		},
+	}
+
+	res, err := handler.WorkspaceWillRenameFiles(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	edits, ok := res.Changes["file:///workspace/ref.md"]
+	if !ok || len(edits) != 1 {
+		t.Fatalf("expected 1 edit in ref.md, got %d", len(edits))
+	}
+
+	te := edits[0]
+	if te.NewText != "test-hello.md" {
+		t.Errorf("expected new link path 'test-hello.md', got '%s'", te.NewText)
+	}
+
+	// Range checking: should be line 0, characters from 10 to 17
+	if te.Range.Start.Line != 0 || te.Range.Start.Character != 10 {
+		t.Errorf("expected start at line 0, char 10, got line %d, char %d", te.Range.Start.Line, te.Range.Start.Character)
+	}
+	if te.Range.End.Line != 0 || te.Range.End.Character != 17 {
+		t.Errorf("expected end at line 0, char 17, got line %d, char %d", te.Range.End.Line, te.Range.End.Character)
+	}
+}
+
+func TestUserReportedRenameBugTextDoc(t *testing.T) {
+	s := state.NewServerState()
+	s.WorkspaceRoot = "/workspace"
+	_ = s.ParseAndIndexContent("file:///workspace/ref.md", []byte(`[testing](test.md)`))
+	_ = s.ParseAndIndexContent("file:///workspace/test.md", []byte(`# Test`))
+
+	handler := BuildHandler(s)
+
+	params := &protocol.RenameParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/ref.md",
+			},
+			Position: protocol.Position{
+				Line:      0,
+				Character: 12, // inside "test.md"
+			},
+		},
+		NewName: "test-hello.md",
+	}
+
+	res, err := handler.TextDocumentRename(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Verify the text edit is correct
+	var textEdit *protocol.TextEdit
+	for _, change := range res.DocumentChanges {
+		if op, ok := change.(protocol.TextDocumentEdit); ok {
+			if op.TextDocument.URI == "file:///workspace/ref.md" {
+				if len(op.Edits) != 1 {
+					t.Fatalf("expected 1 edit in ref.md, got %d", len(op.Edits))
+				}
+				te := op.Edits[0].(protocol.TextEdit)
+				textEdit = &te
+			}
+		}
+	}
+
+	if textEdit == nil {
+		t.Fatal("expected text edit for ref.md")
+	}
+
+	if textEdit.NewText != "test-hello.md" {
+		t.Errorf("expected new link path 'test-hello.md', got '%s'", textEdit.NewText)
+	}
+
+	if textEdit.Range.Start.Line != 0 || textEdit.Range.Start.Character != 10 {
+		t.Errorf("expected start at line 0, char 10, got line %d, char %d", textEdit.Range.Start.Line, textEdit.Range.Start.Character)
+	}
+	if textEdit.Range.End.Line != 0 || textEdit.Range.End.Character != 17 {
+		t.Errorf("expected end at line 0, char 17, got line %d, char %d", textEdit.Range.End.Line, textEdit.Range.End.Character)
+	}
+}
+
+func TestRenameWithAnchors(t *testing.T) {
+	s := state.NewServerState()
+	s.WorkspaceRoot = "/workspace"
+	_ = s.ParseAndIndexContent("file:///workspace/ref.md", []byte(`[testing](test.md#some-section)`))
+	_ = s.ParseAndIndexContent("file:///workspace/test.md", []byte(`# Test`))
+
+	handler := BuildHandler(s)
+
+	params := &protocol.RenameFilesParams{
+		Files: []protocol.FileRename{
+			{
+				OldURI: "file:///workspace/test.md",
+				NewURI: "file:///workspace/test-hello.md",
+			},
+		},
+	}
+
+	res, err := handler.WorkspaceWillRenameFiles(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	edits, ok := res.Changes["file:///workspace/ref.md"]
+	if !ok || len(edits) != 1 {
+		t.Fatalf("expected 1 edit in ref.md, got %d", len(edits))
+	}
+
+	te := edits[0]
+	if te.NewText != "test-hello.md#some-section" {
+		t.Errorf("expected new link path 'test-hello.md#some-section', got '%s'", te.NewText)
+	}
+
+	// Range checking: should be line 0, characters from 10 to 30
+	if te.Range.Start.Line != 0 || te.Range.Start.Character != 10 {
+		t.Errorf("expected start at line 0, char 10, got line %d, char %d", te.Range.Start.Line, te.Range.Start.Character)
+	}
+	if te.Range.End.Line != 0 || te.Range.End.Character != 30 {
+		t.Errorf("expected end at line 0, char 30, got line %d, char %d", te.Range.End.Line, te.Range.End.Character)
 	}
 }
 
