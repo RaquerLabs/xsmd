@@ -14,21 +14,11 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-func logRename(format string, args ...interface{}) {
-	f, err := os.OpenFile("xsmd-rename-debug.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-	pid := os.Getpid()
-	fmt.Fprintf(f, "[%s][PID:%d] "+format+"\n", append([]interface{}{time.Now().Format("15:04:05.000"), pid}, args...)...)
-}
-
 var DisableProcessSharedLock = false
 
 // checkAndTrackRenameProcessShared checks if this rename was recently handled by any process.
 // It returns true if it should be ignored (duplicate).
-func checkAndTrackRenameProcessShared(oldAbs, newAbs string) bool {
+func checkAndTrackRenameProcessShared(state *state.ServerState, oldAbs, newAbs string) bool {
 	if DisableProcessSharedLock {
 		return false
 	}
@@ -40,7 +30,7 @@ func checkAndTrackRenameProcessShared(oldAbs, newAbs string) bool {
 	info, err := os.Stat(lockPath)
 	if err == nil {
 		if time.Since(info.ModTime()) < 5*time.Second {
-			logRename("checkAndTrackRenameProcessShared: Lock file %s is recent (age: %v), ignoring", lockPath, time.Since(info.ModTime()))
+			state.LogNoLock(fmt.Sprintf("[PID:%d] checkAndTrackRenameProcessShared: Lock file %s is recent (age: %v), ignoring", os.Getpid(), lockPath, time.Since(info.ModTime())))
 			return true
 		}
 		// Clean up old stale lock file
@@ -54,7 +44,7 @@ func checkAndTrackRenameProcessShared(oldAbs, newAbs string) bool {
 			// If it was created in a race, double check its age
 			info, errStat := os.Stat(lockPath)
 			if errStat == nil && time.Since(info.ModTime()) < 5*time.Second {
-				logRename("checkAndTrackRenameProcessShared: Lock file %s was created by another process, ignoring", lockPath)
+				state.LogNoLock(fmt.Sprintf("[PID:%d] checkAndTrackRenameProcessShared: Lock file %s was created by another process, ignoring", os.Getpid(), lockPath))
 				return true
 			}
 		}
@@ -63,7 +53,7 @@ func checkAndTrackRenameProcessShared(oldAbs, newAbs string) bool {
 	}
 	f.Close()
 
-	logRename("checkAndTrackRenameProcessShared: Created lock file %s", lockPath)
+	state.LogNoLock(fmt.Sprintf("[PID:%d] checkAndTrackRenameProcessShared: Created lock file %s", os.Getpid(), lockPath))
 
 	// Schedule cleanup in our own process too (best effort)
 	time.AfterFunc(5*time.Second, func() {
@@ -100,39 +90,39 @@ func HandleWorkspaceWillRenameFiles(state *state.ServerState, context *glsp.Cont
 	state.Mu.Lock()
 	defer state.Mu.Unlock()
 
-	logRename("HandleWorkspaceWillRenameFiles called with %d files", len(params.Files))
+	state.LogNoLock(fmt.Sprintf("[PID:%d] HandleWorkspaceWillRenameFiles called with %d files", os.Getpid(), len(params.Files)))
 	changes := make(map[string][]protocol.TextEdit)
 
 	for _, fileRename := range params.Files {
-		logRename("File rename entry: OldURI=%s, NewURI=%s", fileRename.OldURI, fileRename.NewURI)
+		state.LogNoLock(fmt.Sprintf("[PID:%d] File rename entry: OldURI=%s, NewURI=%s", os.Getpid(), fileRename.OldURI, fileRename.NewURI))
 		// Clean both URIs to ensure exact matching and avoid redundant/double updates
 		oldAbs := cleanURIPath(fileRename.OldURI)
 		newAbs := cleanURIPath(fileRename.NewURI)
-		logRename("Cleaned paths: oldAbs=%s, newAbs=%s", oldAbs, newAbs)
+		state.LogNoLock(fmt.Sprintf("[PID:%d] Cleaned paths: oldAbs=%s, newAbs=%s", os.Getpid(), oldAbs, newAbs))
 
 		// Check if we already handled this rename as part of textDocument/rename or a duplicate trigger
 		val, exists := state.ProcessedRenames[oldAbs]
-		logRename("Lookup in ProcessedRenames: key=%s, exists=%t, val=%s", oldAbs, exists, val)
+		state.LogNoLock(fmt.Sprintf("[PID:%d] Lookup in ProcessedRenames: key=%s, exists=%t, val=%s", os.Getpid(), oldAbs, exists, val))
 		if exists && val == newAbs {
-			logRename("Match found in ProcessedRenames, ignoring rename for %s", oldAbs)
+			state.LogNoLock(fmt.Sprintf("[PID:%d] Match found in ProcessedRenames, ignoring rename for %s", os.Getpid(), oldAbs))
 			continue
 		}
 
 		// Process-shared duplicate check
-		if checkAndTrackRenameProcessShared(oldAbs, newAbs) {
-			logRename("Match found in process-shared lock file, ignoring rename for %s", oldAbs)
+		if checkAndTrackRenameProcessShared(state, oldAbs, newAbs) {
+			state.LogNoLock(fmt.Sprintf("[PID:%d] Match found in process-shared lock file, ignoring rename for %s", os.Getpid(), oldAbs))
 			continue
 		}
 
 		// Track this rename so that subsequent duplicate triggers (e.g. from duplicate clients) are ignored.
 		// It will be cleaned up when we receive file watch events (didChangeWatchedFiles / didDeleteFiles) or after a TTL fallback.
-		logRename("Tracking rename in ProcessedRenames: %s -> %s", oldAbs, newAbs)
+		state.LogNoLock(fmt.Sprintf("[PID:%d] Tracking rename in ProcessedRenames: %s -> %s", os.Getpid(), oldAbs, newAbs))
 		state.ProcessedRenames[oldAbs] = newAbs
 		time.AfterFunc(10*time.Second, func() {
 			state.Mu.Lock()
 			defer state.Mu.Unlock()
 			if val, exists := state.ProcessedRenames[oldAbs]; exists && val == newAbs {
-				logRename("TTL expired for %s, deleting from ProcessedRenames", oldAbs)
+				state.LogNoLock(fmt.Sprintf("[PID:%d] TTL expired for %s, deleting from ProcessedRenames", os.Getpid(), oldAbs))
 				delete(state.ProcessedRenames, oldAbs)
 			}
 		})
@@ -211,7 +201,7 @@ func HandleTextDocumentRename(state *state.ServerState, context *glsp.Context, p
 	state.Mu.Lock()
 	defer state.Mu.Unlock()
 
-	logRename("HandleTextDocumentRename called: URI=%s, line=%d, char=%d, NewName=%s", params.TextDocument.URI, params.Position.Line, params.Position.Character, params.NewName)
+	state.LogNoLock(fmt.Sprintf("[PID:%d] HandleTextDocumentRename called: URI=%s, line=%d, char=%d, NewName=%s", os.Getpid(), params.TextDocument.URI, params.Position.Line, params.Position.Character, params.NewName))
 	uri := params.TextDocument.URI
 	cursorLine := params.Position.Line
 
@@ -362,19 +352,19 @@ func HandleTextDocumentRename(state *state.ServerState, context *glsp.Context, p
 	docChanges = append(docChanges, renameOp)
 
 	// Track this rename so that workspace/willRenameFiles is ignored for it
-	logRename("TextDocumentRename tracking rename in ProcessedRenames: %s -> %s", oldAbsPath, newAbsPath)
+	state.LogNoLock(fmt.Sprintf("[PID:%d] TextDocumentRename tracking rename in ProcessedRenames: %s -> %s", os.Getpid(), oldAbsPath, newAbsPath))
 	state.ProcessedRenames[oldAbsPath] = newAbsPath
 	time.AfterFunc(10*time.Second, func() {
 		state.Mu.Lock()
 		defer state.Mu.Unlock()
 		if val, exists := state.ProcessedRenames[oldAbsPath]; exists && val == newAbsPath {
-			logRename("TextDocumentRename TTL expired for %s, deleting from ProcessedRenames", oldAbsPath)
+			state.LogNoLock(fmt.Sprintf("[PID:%d] TextDocumentRename TTL expired for %s, deleting from ProcessedRenames", os.Getpid(), oldAbsPath))
 			delete(state.ProcessedRenames, oldAbsPath)
 		}
 	})
 
 	// Track this rename process-shared
-	_ = checkAndTrackRenameProcessShared(oldAbsPath, newAbsPath)
+	_ = checkAndTrackRenameProcessShared(state, oldAbsPath, newAbsPath)
 
 	// Ship the combined edits + file move back to Neovim to execute
 	return &protocol.WorkspaceEdit{
