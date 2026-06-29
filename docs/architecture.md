@@ -48,9 +48,12 @@ graph TD
   and climbs the directory tree finding files.
 - [internal/state/config.go](/internal/state/config.go):
   Parses `xsmd.toml` configuration options (such as debug mode and ignored directories).
+- [internal/state/path.go](/internal/state/path.go):
+  Helper functions to clean URIs and resolve root-relative/folder-relative links to absolute filesystem paths.
 - [internal/parser/markdown.go](/internal/parser/markdown.go):
   Converts raw Markdown text into an Abstract Syntax Tree (AST),
   extracting titles and character spans of notes.
+  Also defines shared structures like `LineOffsetTable` and position-based link lookup helpers.
 - [internal/lsp/handlers.go](/internal/lsp/handlers.go):
   Configures LSP server capabilities
   (folding, definition, backreferences, autocompletions).

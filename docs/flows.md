@@ -69,10 +69,15 @@ The parser calculates the **exact byte offsets** of links in the source document
    Computes exact start/end line coordinates and characters relative to the row's newline bytes.
 
 This prevents diagnostics or rename actions from bleeding into neighboring text.
+The sequential search and coordinate logic is centralized in the `parser.FindLinkAtPosition` helper.
 
 ## Link Resolution Strategy
 
-When resolving Markdown links across Definition lookup, references search, diagnostics, and renaming:
+When resolving Markdown links across Definition lookup,
+references search, diagnostics, and renaming,
+all path calculations are unified and executed under
+the `ResolveLinkPath` and `CleanURIPath` helper methods in
+[internal/state/path.go](/internal/state/path.go):
 
 - Root-Relative Links (e.g. `[Note](/docs/note.md)`):
   - Detected when the destination path starts with `/`.
