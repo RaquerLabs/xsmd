@@ -2,6 +2,7 @@ package state
 
 import (
 	"bufio"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -40,9 +41,11 @@ func (s *ServerState) LoadConfig() {
 		}
 		key := strings.TrimSpace(parts[0])
 		val := strings.TrimSpace(parts[1])
-		if key == "debug" {
+
+		switch key {
+		case "debug":
 			s.Debug = (val == "true")
-		} else if key == "ignore" {
+		case "ignore":
 			val = strings.TrimSpace(val)
 			if strings.HasPrefix(val, "[") && strings.HasSuffix(val, "]") {
 				arrStr := val[1 : len(val)-1]
@@ -58,6 +61,9 @@ func (s *ServerState) LoadConfig() {
 				s.IgnoreDirs = list
 			}
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		log.Printf("Failed reading xsmd.toml: %v", err)
 	}
 }
 
