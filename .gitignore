@@ -33,3 +33,7 @@ go.work.sum
 # .idea/
 # .vscode/
 Session.vim
+
+# Application logs
+xsmd.log
+
