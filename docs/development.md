@@ -85,9 +85,9 @@ vim.lsp.set_log_level("debug")
 vim.cmd("edit " .. vim.lsp.get_log_path())
 ```
 
-You can use this to print the state index content:
+If you have the nvim plugin installed,
+you can use this to print the state index content:
 
 ```plaintext
-:lua vim.lsp.buf.execute_command({command = "xsmd.dumpState"})
+:XsmdDump
 ```
-

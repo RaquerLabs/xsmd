@@ -3,7 +3,9 @@
 ## Booting
 
 When the IDE initializes the client connection,
-the server finds the root and indexes Markdown content asynchronously:
+the server finds the root,
+loads the `xsmd.toml` configuration,
+and indexes Markdown content asynchronously:
 
 ```mermaid
 sequenceDiagram
