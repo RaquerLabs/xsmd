@@ -65,7 +65,7 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 					sState.Mu.RLock()
 					count := len(sState.Index)
 					sState.Mu.RUnlock()
-					log.Printf("Workspace successfully indexed! Found %d files.", count)
+					sState.Log(fmt.Sprintf("Workspace successfully indexed! Found %d files.", count))
 				}
 			}()
 
@@ -74,7 +74,7 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 
 		// Absorbs Neovim's post-handshake notification
 		Initialized: func(context *glsp.Context, params *protocol.InitializedParams) error {
-			log.Println("LSP client handshake completed successfully!")
+			sState.Log("LSP client handshake completed successfully!")
 			return nil
 		},
 
@@ -122,22 +122,8 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 				return nil, nil
 			}
 
-			var lineOffsets []int
-			lineOffsets = append(lineOffsets, 0)
-			for i, b := range docInfo.Content {
-				if b == '\n' {
-					lineOffsets = append(lineOffsets, i+1)
-				}
-			}
-
-			getLineFromOffset := func(offset int) uint32 {
-				for lineNum, startOffset := range lineOffsets {
-					if offset >= startOffset && (lineNum == len(lineOffsets)-1 || offset < lineOffsets[lineNum+1]) {
-						return uint32(lineNum)
-					}
-				}
-				return 0
-			}
+			lineOffsets := parser.NewLineOffsetTable(docInfo.Content)
+			getLineFromOffset := lineOffsets.GetLineFromOffset
 
 			var folds []protocol.FoldingRange
 			totalLines := uint32(len(lineOffsets) - 1)
@@ -239,60 +225,18 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 			defer sState.Mu.RUnlock()
 
 			uri := params.TextDocument.URI
-			cursorLine := params.Position.Line
 
 			docInfo, exists := sState.Index[uri]
 			if !exists {
 				return nil, nil
 			}
 
-			var targetLink *parser.ExtractedLink
-			for i := range docInfo.Links {
-				link := &docInfo.Links[i]
-				if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
-					if link.Range.Start.Line == link.Range.End.Line {
-						if params.Position.Character >= link.Range.Start.Character && params.Position.Character <= link.Range.End.Character {
-							targetLink = link
-							break
-						}
-					} else {
-						onStartLine := cursorLine == link.Range.Start.Line
-						onEndLine := cursorLine == link.Range.End.Line
-						if (!onStartLine || params.Position.Character >= link.Range.Start.Character) &&
-							(!onEndLine || params.Position.Character <= link.Range.End.Character) {
-							targetLink = link
-							break
-						}
-					}
-				}
-			}
-
-			// Fallback to first link on the line if character matching didn't yield anything
-			if targetLink == nil {
-				for i := range docInfo.Links {
-					link := &docInfo.Links[i]
-					if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
-						targetLink = link
-						break
-					}
-				}
-			}
-
+			targetLink := parser.FindLinkAtPosition(docInfo.Links, params.Position)
 			if targetLink == nil {
 				return nil, nil
 			}
 
-			var targetAbsPath string
-			if strings.HasPrefix(targetLink.Path, "/") {
-				cleanPath := filepath.Clean(targetLink.Path)
-				cleanPath = strings.TrimPrefix(cleanPath, string(filepath.Separator))
-				cleanPath = strings.TrimPrefix(cleanPath, "/")
-				targetAbsPath = filepath.Join(sState.WorkspaceRoot, cleanPath)
-			} else {
-				sourceAbsPath := strings.TrimPrefix(uri, "file://")
-				sourceDir := filepath.Dir(sourceAbsPath)
-				targetAbsPath = filepath.Clean(filepath.Join(sourceDir, targetLink.Path))
-			}
+			targetAbsPath := sState.ResolveLinkPath(uri, targetLink.Path)
 			targetURI := "file://" + targetAbsPath
 
 			return protocol.Location{
@@ -317,25 +261,10 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 
 			for _, docInfo := range sState.Index {
 				for _, link := range docInfo.Links {
-					filePath := link.Path
-					if idx := strings.Index(filePath, "#"); idx != -1 {
-						filePath = filePath[:idx]
-					}
-					if filePath == "" {
+					if strings.HasPrefix(link.Path, "#") || link.Path == "" {
 						continue
 					}
-
-					var targetAbsPath string
-					if strings.HasPrefix(filePath, "/") {
-						cleanPath := filepath.Clean(filePath)
-						cleanPath = strings.TrimPrefix(cleanPath, string(filepath.Separator))
-						cleanPath = strings.TrimPrefix(cleanPath, "/")
-						targetAbsPath = filepath.Join(sState.WorkspaceRoot, cleanPath)
-					} else {
-						sourceAbsPath := strings.TrimPrefix(docInfo.URI, "file://")
-						sourceDir := filepath.Dir(sourceAbsPath)
-						targetAbsPath = filepath.Clean(filepath.Join(sourceDir, filePath))
-					}
+					targetAbsPath := sState.ResolveLinkPath(docInfo.URI, link.Path)
 
 					if filepath.Clean(targetAbsPath) == filepath.Clean(currentAbsPath) {
 						locations = append(locations, protocol.Location{
@@ -392,7 +321,7 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 					}
 				case protocol.FileChangeTypeDeleted:
 					delete(sState.Index, uri)
-					delete(sState.ProcessedRenames, cleanURIPath(uri))
+					delete(sState.ProcessedRenames, state.CleanURIPath(uri))
 				}
 			}
 			return nil
@@ -426,7 +355,7 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 					continue
 				}
 				delete(sState.Index, uri)
-				delete(sState.ProcessedRenames, cleanURIPath(uri))
+				delete(sState.ProcessedRenames, state.CleanURIPath(uri))
 			}
 			return nil
 		},

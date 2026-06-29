@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Consolidated duplicate link lookup algorithm into a centralized `parser.FindLinkAtPosition` helper.
+- Refactored duplicated line offset table calculations into a unified `parser.LineOffsetTable` helper.
+- Standardized path resolution and URI cleaning helper functions into a new `internal/state/path.go` (methods `CleanURIPath` and `ResolveLinkPath`).
+- Silenced noisy `log.Printf` logging on stdout/stderr during diagnostics and startup; errors remain logged, but diagnostic info traces are now sent via `sState.Log` (active only when `debug = true` in `xsmd.toml`).
+- Added `xsmd.log` to `.gitignore` to prevent debugging trace logs from being committed.
 - Workspace Crawling: Scans workspace on startup, uses `xsmd.toml` to define the root.
 - Go to Definition:
   - Resolves workspace-relative paths

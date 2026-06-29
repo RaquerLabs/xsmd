@@ -23,22 +23,8 @@ func ParseMarkdown(uri string, content []byte) (ast.Node, []ExtractedLink, strin
 	reader := text.NewReader(content)
 	doc := md.Parser().Parse(reader)
 
-	var lineOffsets []int
-	lineOffsets = append(lineOffsets, 0)
-	for i, b := range content {
-		if b == '\n' {
-			lineOffsets = append(lineOffsets, i+1)
-		}
-	}
-
-	getLineFromOffset := func(offset int) uint32 {
-		for lineNum, startOffset := range lineOffsets {
-			if offset >= startOffset && (lineNum == len(lineOffsets)-1 || offset < lineOffsets[lineNum+1]) {
-				return uint32(lineNum)
-			}
-		}
-		return 0
-	}
+	lineOffsets := NewLineOffsetTable(content)
+	getLineFromOffset := lineOffsets.GetLineFromOffset
 
 	var extractedLinks []ExtractedLink
 	var docTitle string
@@ -141,4 +127,67 @@ func ParseMarkdown(uri string, content []byte) (ast.Node, []ExtractedLink, strin
 	}
 
 	return doc, extractedLinks, docTitle, hasH1
+}
+
+// LineOffsetTable is a helper for converting byte offsets to line numbers.
+type LineOffsetTable []int
+
+// NewLineOffsetTable creates a LineOffsetTable from a byte array.
+func NewLineOffsetTable(content []byte) LineOffsetTable {
+	var table []int
+	table = append(table, 0)
+	for i, b := range content {
+		if b == '\n' {
+			table = append(table, i+1)
+		}
+	}
+	return table
+}
+
+// GetLineFromOffset converts a byte offset to a 0-indexed line number.
+func (t LineOffsetTable) GetLineFromOffset(offset int) uint32 {
+	for lineNum, startOffset := range t {
+		if offset >= startOffset && (lineNum == len(t)-1 || offset < t[lineNum+1]) {
+			return uint32(lineNum)
+		}
+	}
+	return 0
+}
+
+// FindLinkAtPosition locates an ExtractedLink at the specified position.
+func FindLinkAtPosition(links []ExtractedLink, pos protocol.Position) *ExtractedLink {
+	var targetLink *ExtractedLink
+	cursorLine := pos.Line
+	cursorChar := pos.Character
+
+	for i := range links {
+		link := &links[i]
+		if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
+			if link.Range.Start.Line == link.Range.End.Line {
+				if cursorChar >= link.Range.Start.Character && cursorChar <= link.Range.End.Character {
+					targetLink = link
+					break
+				}
+			} else {
+				onStartLine := cursorLine == link.Range.Start.Line
+				onEndLine := cursorLine == link.Range.End.Line
+				if (!onStartLine || cursorChar >= link.Range.Start.Character) &&
+					(!onEndLine || cursorChar <= link.Range.End.Character) {
+					targetLink = link
+					break
+				}
+			}
+		}
+	}
+
+	if targetLink == nil {
+		for i := range links {
+			link := &links[i]
+			if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
+				targetLink = link
+				break
+			}
+		}
+	}
+	return targetLink
 }

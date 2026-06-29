@@ -1,9 +1,8 @@
 package lsp
 
 import (
-	"log"
+	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/RaquerLabs/xsmd/internal/state"
@@ -18,7 +17,7 @@ func PublishDiagnostics(sState *state.ServerState, context *glsp.Context, uri st
 	workspaceRoot := sState.WorkspaceRoot
 	sState.Mu.RUnlock()
 
-	log.Printf("[Diagnostics] Checking URI: %s (exists=%v), WorkspaceRoot: %s", uri, exists, workspaceRoot)
+	sState.Log(fmt.Sprintf("[Diagnostics] Checking URI: %s (exists=%v), WorkspaceRoot: %s", uri, exists, workspaceRoot))
 
 	if !exists {
 		return
@@ -40,17 +39,7 @@ func PublishDiagnostics(sState *state.ServerState, context *glsp.Context, uri st
 			continue
 		}
 
-		var targetAbsPath string
-		if strings.HasPrefix(filePath, "/") {
-			cleanPath := filepath.Clean(filePath)
-			cleanPath = strings.TrimPrefix(cleanPath, string(filepath.Separator))
-			cleanPath = strings.TrimPrefix(cleanPath, "/")
-			targetAbsPath = filepath.Join(workspaceRoot, cleanPath)
-		} else {
-			sourceAbsPath := strings.TrimPrefix(uri, "file://")
-			sourceDir := filepath.Dir(sourceAbsPath)
-			targetAbsPath = filepath.Clean(filepath.Join(sourceDir, filePath))
-		}
+		targetAbsPath := sState.ResolveLinkPath(uri, filePath)
 		targetURI := "file://" + targetAbsPath
 
 		// First, check in-memory cache
@@ -68,8 +57,8 @@ func PublishDiagnostics(sState *state.ServerState, context *glsp.Context, uri st
 			}
 		}
 
-		log.Printf("[Diagnostics] Link path: %s -> Abs: %s, URI: %s, InIndex: %v, OnDisk: %v (err: %v)",
-			link.Path, targetAbsPath, targetURI, existsInIndex, existsOnDisk, statErr)
+		sState.Log(fmt.Sprintf("[Diagnostics] Link path: %s -> Abs: %s, URI: %s, InIndex: %v, OnDisk: %v (err: %v)",
+			link.Path, targetAbsPath, targetURI, existsInIndex, existsOnDisk, statErr))
 
 		if !existsInIndex && !existsOnDisk {
 			severity := protocol.DiagnosticSeverityError

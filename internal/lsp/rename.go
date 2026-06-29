@@ -63,27 +63,7 @@ func checkAndTrackRenameProcessShared(state *state.ServerState, oldAbs, newAbs s
 	return false
 }
 
-// cleanURIPath converts a URI (which may have double or triple slashes, e.g. file:// or file:///)
-// to a standardized absolute filesystem path.
-// public for use within lsp package.
-func cleanURIPath(uri string) string {
-	p := uri
-	prefixes := []string{"file://localhost", "file:///", "file://", "file:/", "file:"}
-	for _, prefix := range prefixes {
-		if strings.HasPrefix(p, prefix) {
-			p = strings.TrimPrefix(p, prefix)
-			break
-		}
-	}
-	// On Windows, a URI might look like /C:/path. Trim the leading slash if followed by drive letter.
-	if len(p) >= 3 && p[0] == '/' && p[2] == ':' && ((p[1] >= 'a' && p[1] <= 'z') || (p[1] >= 'A' && p[1] <= 'Z')) {
-		p = p[1:]
-	}
-	if !strings.HasPrefix(p, "/") && !filepath.IsAbs(p) {
-		p = "/" + p
-	}
-	return filepath.Clean(p)
-}
+
 
 // HandleWorkspaceWillRenameFiles resolves files that are about to be renamed on disk and fixes broken links
 func HandleWorkspaceWillRenameFiles(state *state.ServerState, context *glsp.Context, params *protocol.RenameFilesParams) (*protocol.WorkspaceEdit, error) {
@@ -96,8 +76,8 @@ func HandleWorkspaceWillRenameFiles(state *state.ServerState, context *glsp.Cont
 	for _, fileRename := range params.Files {
 		state.LogNoLock(fmt.Sprintf("[PID:%d] File rename entry: OldURI=%s, NewURI=%s", os.Getpid(), fileRename.OldURI, fileRename.NewURI))
 		// Clean both URIs to ensure exact matching and avoid redundant/double updates
-		oldAbs := cleanURIPath(fileRename.OldURI)
-		newAbs := cleanURIPath(fileRename.NewURI)
+		oldAbs := state.CleanURIPath(fileRename.OldURI)
+		newAbs := state.CleanURIPath(fileRename.NewURI)
 		state.LogNoLock(fmt.Sprintf("[PID:%d] Cleaned paths: oldAbs=%s, newAbs=%s", os.Getpid(), oldAbs, newAbs))
 
 		// Check if we already handled this rename as part of textDocument/rename or a duplicate trigger
@@ -141,24 +121,14 @@ func HandleWorkspaceWillRenameFiles(state *state.ServerState, context *glsp.Cont
 					linkPath = linkPath[:idx]
 				}
 
-				var targetAbsPath string
-				if strings.HasPrefix(linkPath, "/") {
-					cleanPath := filepath.Clean(linkPath)
-					cleanPath = strings.TrimPrefix(cleanPath, string(filepath.Separator))
-					cleanPath = strings.TrimPrefix(cleanPath, "/")
-					targetAbsPath = filepath.Join(state.WorkspaceRoot, cleanPath)
-				} else {
-					sourceAbsPath := cleanURIPath(uri)
-					sourceDir := filepath.Dir(sourceAbsPath)
-					targetAbsPath = filepath.Clean(filepath.Join(sourceDir, linkPath))
-				}
+				targetAbsPath := state.ResolveLinkPath(uri, linkPath)
 
 				if filepath.Clean(targetAbsPath) == filepath.Clean(oldAbs) {
 					var newLinkPath string
 					if strings.HasPrefix(link.Path, "/") {
 						newLinkPath = "/" + newRel
 					} else {
-						sourceAbsPath := cleanURIPath(uri)
+						sourceAbsPath := state.CleanURIPath(uri)
 						sourceDir := filepath.Dir(sourceAbsPath)
 						relPath, err := filepath.Rel(sourceDir, newAbs)
 						if err == nil {
@@ -195,65 +165,18 @@ func HandleTextDocumentRename(state *state.ServerState, context *glsp.Context, p
 
 	state.LogNoLock(fmt.Sprintf("[PID:%d] HandleTextDocumentRename called: URI=%s, line=%d, char=%d, NewName=%s", os.Getpid(), params.TextDocument.URI, params.Position.Line, params.Position.Character, params.NewName))
 	uri := params.TextDocument.URI
-	cursorLine := params.Position.Line
 
 	docInfo, exists := state.Index[uri]
 	if !exists {
 		return nil, nil
 	}
 
-	// Figure out which link we are trying to rename
-	var targetLink *parser.ExtractedLink
-	for i := range docInfo.Links {
-		link := &docInfo.Links[i]
-		if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
-			if link.Range.Start.Line == link.Range.End.Line {
-				if params.Position.Character >= link.Range.Start.Character && params.Position.Character <= link.Range.End.Character {
-					targetLink = link
-					break
-				}
-			} else {
-				onStartLine := cursorLine == link.Range.Start.Line
-				onEndLine := cursorLine == link.Range.End.Line
-				if (!onStartLine || params.Position.Character >= link.Range.Start.Character) &&
-					(!onEndLine || params.Position.Character <= link.Range.End.Character) {
-					targetLink = link
-					break
-				}
-			}
-		}
-	}
-
-	if targetLink == nil {
-		for i := range docInfo.Links {
-			link := &docInfo.Links[i]
-			if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
-				targetLink = link
-				break
-			}
-		}
-	}
-
+	targetLink := parser.FindLinkAtPosition(docInfo.Links, params.Position)
 	if targetLink == nil {
 		return nil, nil // Not on a link, ignore
 	}
 
-	targetPath := targetLink.Path
-	if idx := strings.Index(targetPath, "#"); idx != -1 {
-		targetPath = targetPath[:idx]
-	}
-
-	var oldAbsPath string
-	if strings.HasPrefix(targetPath, "/") {
-		cleanPath := filepath.Clean(targetPath)
-		cleanPath = strings.TrimPrefix(cleanPath, string(filepath.Separator))
-		cleanPath = strings.TrimPrefix(cleanPath, "/")
-		oldAbsPath = filepath.Join(state.WorkspaceRoot, cleanPath)
-	} else {
-		sourceAbsPath := cleanURIPath(uri)
-		sourceDir := filepath.Dir(sourceAbsPath)
-		oldAbsPath = filepath.Clean(filepath.Join(sourceDir, targetPath))
-	}
+	oldAbsPath := state.ResolveLinkPath(uri, targetLink.Path)
 
 	newNameCleaned := filepath.Clean(params.NewName)
 	if !strings.HasSuffix(newNameCleaned, ".md") && !strings.HasSuffix(newNameCleaned, ".markdown") {
@@ -284,17 +207,7 @@ func HandleTextDocumentRename(state *state.ServerState, context *glsp.Context, p
 				linkPath = linkPath[:idx]
 			}
 
-			var linkAbsPath string
-			if strings.HasPrefix(linkPath, "/") {
-				cleanPath := filepath.Clean(linkPath)
-				cleanPath = strings.TrimPrefix(cleanPath, string(filepath.Separator))
-				cleanPath = strings.TrimPrefix(cleanPath, "/")
-				linkAbsPath = filepath.Join(state.WorkspaceRoot, cleanPath)
-			} else {
-				sourceAbsPath := cleanURIPath(indexUri)
-				sourceDir := filepath.Dir(sourceAbsPath)
-				linkAbsPath = filepath.Clean(filepath.Join(sourceDir, linkPath))
-			}
+			linkAbsPath := state.ResolveLinkPath(indexUri, linkPath)
 
 			if filepath.Clean(linkAbsPath) == filepath.Clean(oldAbsPath) {
 				var newLinkPath string
@@ -306,7 +219,7 @@ func HandleTextDocumentRename(state *state.ServerState, context *glsp.Context, p
 						newLinkPath = "/" + filepath.ToSlash(newAbsPath)
 					}
 				} else {
-					sourceAbsPath := cleanURIPath(indexUri)
+					sourceAbsPath := state.CleanURIPath(indexUri)
 					sourceDir := filepath.Dir(sourceAbsPath)
 					relToDoc, err := filepath.Rel(sourceDir, newAbsPath)
 					if err == nil {
@@ -362,45 +275,13 @@ func HandleTextDocumentPrepareRename(state *state.ServerState, context *glsp.Con
 	defer state.Mu.RUnlock()
 
 	uri := params.TextDocument.URI
-	cursorLine := params.Position.Line
 
 	docInfo, exists := state.Index[uri]
 	if !exists {
 		return nil, nil
 	}
 
-	// 1. Find the link under the cursor
-	var targetLink *parser.ExtractedLink
-	for i := range docInfo.Links {
-		link := &docInfo.Links[i]
-		if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
-			if link.Range.Start.Line == link.Range.End.Line {
-				if params.Position.Character >= link.Range.Start.Character && params.Position.Character <= link.Range.End.Character {
-					targetLink = link
-					break
-				}
-			} else {
-				onStartLine := cursorLine == link.Range.Start.Line
-				onEndLine := cursorLine == link.Range.End.Line
-				if (!onStartLine || params.Position.Character >= link.Range.Start.Character) &&
-					(!onEndLine || params.Position.Character <= link.Range.End.Character) {
-					targetLink = link
-					break
-				}
-			}
-		}
-	}
-
-	if targetLink == nil {
-		for i := range docInfo.Links {
-			link := &docInfo.Links[i]
-			if cursorLine >= link.Range.Start.Line && cursorLine <= link.Range.End.Line {
-				targetLink = link
-				break
-			}
-		}
-	}
-
+	targetLink := parser.FindLinkAtPosition(docInfo.Links, params.Position)
 	if targetLink == nil {
 		return nil, nil // Not on a link, cancel the rename action entirely
 	}
