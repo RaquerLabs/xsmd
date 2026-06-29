@@ -1,7 +1,9 @@
 package parser
 
 import (
+	"bytes"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -42,10 +44,10 @@ func ParseMarkdown(uri string, content []byte) (ast.Node, []ExtractedLink, strin
 			var pathStartLine, pathEndLine uint32
 			var pathStartChar, pathEndChar uint32
 
-			pattern := "](" + destPath + ")"
+			pattern := []byte("](" + destPath + ")")
 			idx := -1
 			if searchFrom < len(content) {
-				idx = strings.Index(string(content[searchFrom:]), pattern)
+				idx = bytes.Index(content[searchFrom:], pattern)
 			}
 
 			if idx != -1 {
@@ -146,10 +148,11 @@ func NewLineOffsetTable(content []byte) LineOffsetTable {
 
 // GetLineFromOffset converts a byte offset to a 0-indexed line number.
 func (t LineOffsetTable) GetLineFromOffset(offset int) uint32 {
-	for lineNum, startOffset := range t {
-		if offset >= startOffset && (lineNum == len(t)-1 || offset < t[lineNum+1]) {
-			return uint32(lineNum)
-		}
+	idx := sort.Search(len(t), func(i int) bool {
+		return t[i] > offset
+	})
+	if idx > 0 {
+		return uint32(idx - 1)
 	}
 	return 0
 }

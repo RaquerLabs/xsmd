@@ -14,14 +14,21 @@ import (
 func PublishDiagnostics(sState *state.ServerState, context *glsp.Context, uri string) {
 	sState.Mu.RLock()
 	docInfo, exists := sState.Index[uri]
+	if !exists {
+		sState.Mu.RUnlock()
+		return
+	}
+
+	// Snapshot all index keys under the read-lock to avoid acquiring locks repeatedly
+	// or holding them during blocking disk I/O operations (os.Stat) inside the loop.
+	indexKeys := make(map[string]struct{}, len(sState.Index))
+	for k := range sState.Index {
+		indexKeys[k] = struct{}{}
+	}
 	workspaceRoot := sState.WorkspaceRoot
 	sState.Mu.RUnlock()
 
 	sState.Log(fmt.Sprintf("[Diagnostics] Checking URI: %s (exists=%v), WorkspaceRoot: %s", uri, exists, workspaceRoot))
-
-	if !exists {
-		return
-	}
 
 	diagnostics := []protocol.Diagnostic{}
 
@@ -42,10 +49,7 @@ func PublishDiagnostics(sState *state.ServerState, context *glsp.Context, uri st
 		targetAbsPath := sState.ResolveLinkPath(uri, filePath)
 		targetURI := "file://" + targetAbsPath
 
-		// First, check in-memory cache
-		sState.Mu.RLock()
-		_, existsInIndex := sState.Index[targetURI]
-		sState.Mu.RUnlock()
+		_, existsInIndex := indexKeys[targetURI]
 
 		var statErr error
 		existsOnDisk := false
