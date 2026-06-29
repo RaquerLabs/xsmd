@@ -64,17 +64,6 @@ Deletes compiled local binaries and release distribution directories:
 mise run clean
 ```
 
-## Contributing Workflow
-
-1.  Fork & Clone
-2.  Make Changes:
-    Write code under `internal/` or entry points in `cmd/`.
-3.  Write Tests:
-    Always add unit tests inside `_test.go` files.
-4.  Format & Test:
-    `mise run format && mise run test`
-5.  Submit a PR
-
 ## Inspecting
 
 Add this to your init.lua:
