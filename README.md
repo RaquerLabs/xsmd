@@ -103,10 +103,16 @@ Compile:
 mise run build
 ```
 
-Launch:
+Launch the LSP server:
 
 ```bash
 ./dist/xsmd
+```
+
+List indexed workspace files (ignoring configured directories):
+
+```bash
+./dist/xsmd list
 ```
 
 To install it globally:

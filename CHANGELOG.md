@@ -27,5 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configuration (`xsmd.toml`):
   - `debug`: Setting to toggle verbose logging to `xsmd.log`.
   - `ignore`: Directory paths to ignore during autocompletion.
-- LSP Command:
-  - `xsmd.dumpState`: Custom command for debugging and printing the state index to `xsmd.log`.
+- **LSP Command**:
+  - `xsmd.dumpState`: Custom command that outputs a list of all currently indexed workspace file URIs directly to `xsmd.log`.
+- **CLI Subcommand**:
+  - `list`: Outputs all workspace Markdown file relative paths (respecting ignore lists) directly to standard output.
