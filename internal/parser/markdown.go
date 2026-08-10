@@ -1,15 +1,17 @@
 package parser
 
 import (
-	"bytes"
 	"path/filepath"
 	"sort"
 	"strings"
+	"unicode/utf16"
+	"unicode/utf8"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
 	"github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 )
 
 // ExtractedLink stores information about the links found in documents
@@ -31,7 +33,6 @@ func ParseMarkdown(uri string, content []byte) (ast.Node, []ExtractedLink, strin
 	var extractedLinks []ExtractedLink
 	var docTitle string
 	var hasH1 bool
-	searchFrom := 0
 
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		// Extract links
@@ -44,35 +45,35 @@ func ParseMarkdown(uri string, content []byte) (ast.Node, []ExtractedLink, strin
 			var pathStartLine, pathEndLine uint32
 			var pathStartChar, pathEndChar uint32
 
-			pattern := []byte("](" + destPath + ")")
-			idx := -1
-			if searchFrom < len(content) {
-				idx = bytes.Index(content[searchFrom:], pattern)
+			// The link's label segments point into the raw source, so the
+			// construct is located exactly: '[' before the first label byte,
+			// ']' after the last. findLinkSpan then parses the destination and
+			// optional title following goldmark's inline link grammar, so
+			// ranges stay precise for titles, angle-bracket destinations,
+			// escapes, and destinations split across lines. No source search is
+			// involved, so links never shadow or displace each other.
+			var startByte, endByte int
+			var pathStartByte, pathEndByte int
+			found := false
+			if labelStart, closeBracket, ok := linkLabelSpan(n); ok {
+				if _, candPathStart, candPathEnd, candEnd, ok := findLinkSpan(content, closeBracket); ok {
+					startByte, endByte = labelStart, candEnd
+					pathStartByte, pathEndByte = candPathStart, candPathEnd
+					found = true
+				}
 			}
 
-			if idx != -1 {
-				absPatternStart := searchFrom + idx
-				endByte := absPatternStart + len(pattern)
-
-				startByte := absPatternStart
-				for startByte > searchFrom && content[startByte] != '[' {
-					startByte--
-				}
-
+			if found {
 				startLine = getLineFromOffset(startByte)
 				endLine = getLineFromOffset(endByte)
-				startChar = uint32(startByte - lineOffsets[startLine])
-				endChar = uint32(endByte - lineOffsets[endLine])
-
-				pathStartByte := absPatternStart + 2
-				pathEndByte := pathStartByte + len(destPath)
+				// LSP positions count UTF-16 code units, not bytes.
+				startChar = utf16Len(content[lineOffsets[startLine]:startByte])
+				endChar = utf16Len(content[lineOffsets[endLine]:endByte])
 
 				pathStartLine = getLineFromOffset(pathStartByte)
 				pathEndLine = getLineFromOffset(pathEndByte)
-				pathStartChar = uint32(pathStartByte - lineOffsets[pathStartLine])
-				pathEndChar = uint32(pathEndByte - lineOffsets[pathEndLine])
-
-				searchFrom = endByte
+				pathStartChar = utf16Len(content[lineOffsets[pathStartLine]:pathStartByte])
+				pathEndChar = utf16Len(content[lineOffsets[pathEndLine]:pathEndByte])
 			} else {
 				// Fallback to parent block line range
 				parent := n.Parent()
@@ -129,6 +130,185 @@ func ParseMarkdown(uri string, content []byte) (ast.Node, []ExtractedLink, strin
 	}
 
 	return doc, extractedLinks, docTitle, hasH1
+}
+
+// linkLabelSpan returns the raw source byte offsets of a link's label: the
+// opening '[' and the closing ']'. The link's child segments (text, code,
+// raw HTML) point into the original source, so the '[' is the byte right
+// before the first segment and the ']' the byte right after the last.
+func linkLabelSpan(n ast.Node) (openBracket, closeBracket int, ok bool) {
+	first, last := -1, -1
+	_ = ast.Walk(n, func(m ast.Node, entering bool) (ast.WalkStatus, error) {
+		if !entering {
+			return ast.WalkContinue, nil
+		}
+		var segs []text.Segment
+		switch t := m.(type) {
+		case *ast.Text:
+			segs = []text.Segment{t.Segment}
+		case *ast.CodeSpan:
+			if lines := t.Lines(); lines != nil {
+				for i := range lines.Len() {
+					segs = append(segs, lines.At(i))
+				}
+			}
+		case *ast.RawHTML:
+			for i := range t.Segments.Len() {
+				segs = append(segs, t.Segments.At(i))
+			}
+		}
+		for _, s := range segs {
+			if first == -1 || s.Start < first {
+				first = s.Start
+			}
+			if s.Stop > last {
+				last = s.Stop
+			}
+		}
+		return ast.WalkContinue, nil
+	})
+	if first == -1 {
+		return 0, 0, false
+	}
+	return first - 1, last, true
+}
+
+// findLinkSpan locates the source byte span of an inline link starting at the
+// ']' at closeBracket, mirroring goldmark's inline link grammar: optional
+// angle-bracket destination, optional title, and the closing ')'. It returns
+// the byte offsets of the opening '[', the destination path (end exclusive),
+// and the position just past the closing ')'. ok is false when the construct
+// does not parse as a valid inline link.
+func findLinkSpan(content []byte, closeBracket int) (start, pathStart, pathEnd, end int, ok bool) {
+	if closeBracket+1 >= len(content) || content[closeBracket+1] != '(' {
+		return 0, 0, 0, 0, false
+	}
+
+	i := closeBracket + 2
+	for i < len(content) && util.IsSpace(content[i]) {
+		i++
+	}
+	pathStart = i
+
+	terminated := false
+	afterDest := 0
+	if i < len(content) && content[i] == '<' {
+		// Angle-bracket destination: ends at an unescaped '>'; cannot span
+		// lines (goldmark scans a single line).
+		pathStart++
+		j := i + 1
+		for j < len(content) {
+			c := content[j]
+			if c == '\\' && j+1 < len(content) && util.IsPunct(content[j+1]) {
+				j += 2
+				continue
+			}
+			if c == '>' {
+				pathEnd = j
+				j++
+				terminated = true
+				afterDest = j
+				break
+			}
+			if c == '\n' {
+				break
+			}
+			j++
+		}
+	} else {
+		// Bare destination: ends at an unescaped space or an unescaped ')' at
+		// depth 0 (nested parens are allowed, mirroring goldmark).
+		opened := 0
+		for i < len(content) {
+			c := content[i]
+			if c == '\\' && i+1 < len(content) && util.IsPunct(content[i+1]) {
+				i += 2
+				continue
+			}
+			if c == '(' {
+				opened++
+			} else if c == ')' {
+				if opened == 0 {
+					// The ')' itself closes the link, so the post-destination
+					// scan resumes at it (unlike '<' in the angle form, which
+					// is consumed as part of the destination syntax).
+					pathEnd = i
+					terminated = true
+					afterDest = i
+					break
+				}
+				opened--
+			} else if util.IsSpace(c) {
+				pathEnd = i
+				terminated = true
+				afterDest = i
+				break
+			}
+			i++
+		}
+	}
+	if !terminated {
+		return 0, 0, 0, 0, false
+	}
+
+	// After the destination: optional whitespace (including newlines), then
+	// ')' or a title, then whitespace and ')'.
+	i = afterDest
+	for i < len(content) && util.IsSpace(content[i]) {
+		i++
+	}
+	if i < len(content) && content[i] == ')' {
+		end = i + 1
+	} else if i < len(content) && (content[i] == '"' || content[i] == '\'' || content[i] == '(') {
+		opener := content[i]
+		closer := opener
+		if opener == '(' {
+			closer = ')'
+		}
+		j := i + 1
+		for j < len(content) {
+			c := content[j]
+			if c == '\\' && j+1 < len(content) {
+				j += 2
+				continue
+			}
+			if c == closer {
+				j++
+				break
+			}
+			j++
+		}
+		if j > 0 && j <= len(content) && content[j-1] == closer {
+			for j < len(content) && util.IsSpace(content[j]) {
+				j++
+			}
+			if j < len(content) && content[j] == ')' {
+				end = j + 1
+			}
+		}
+	}
+	if end == 0 {
+		return 0, 0, 0, 0, false
+	}
+
+	// Walk back to the opening '['.
+	start = closeBracket
+	for start > 0 && content[start] != '[' {
+		start--
+	}
+	return start, pathStart, pathEnd, end, true
+}
+
+// utf16Len returns the number of UTF-16 code units in b, matching the LSP
+// position encoding (astral runes count as two units).
+func utf16Len(b []byte) uint32 {
+	var n uint32
+	for len(b) > 0 {
+		r, size := utf8.DecodeRune(b)
+		n += uint32(utf16.RuneLen(r))
+		b = b[size:]
+	}
+	return n
 }
 
 // LineOffsetTable is a helper for converting byte offsets to line numbers.

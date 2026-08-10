@@ -70,7 +70,7 @@ func PublishDiagnostics(sState *state.ServerState, context *glsp.Context, uri st
 			message := "Broken link: file does not exist"
 
 			diagnostics = append(diagnostics, protocol.Diagnostic{
-				Range:    link.Range,
+				Range:    link.PathRange,
 				Severity: &severity,
 				Source:   &source,
 				Message:  message,
