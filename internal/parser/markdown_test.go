@@ -112,6 +112,74 @@ func TestParseMarkdownNoCascadeAfterFallback(t *testing.T) {
 	}
 }
 
+func TestParseMarkdownLinkLabelCodeSpan(t *testing.T) {
+	// Regression: linkLabelSpan called Lines() on *ast.CodeSpan, which embeds
+	// BaseInline and panics ("can not call with inline nodes"). Code span
+	// content arrives as Text children, so labels containing code spans must
+	// resolve to exact ranges.
+	content := []byte("# T\n\nUse [`code` link](docs/test.md).\n")
+	_, links, _, _ := ParseMarkdown("file:///t.md", content)
+	if len(links) != 1 {
+		t.Fatalf("expected 1 link, got %d", len(links))
+	}
+	l := links[0]
+	if l.Path != "docs/test.md" {
+		t.Errorf("expected path 'docs/test.md', got '%s'", l.Path)
+	}
+	if l.PathRange.Start.Line != 2 || l.PathRange.Start.Character != 18 ||
+		l.PathRange.End.Line != 2 || l.PathRange.End.Character != 30 {
+		t.Errorf("code span label: expected PathRange {2,18}->{2,30}, got %v->%v",
+			l.PathRange.Start, l.PathRange.End)
+	}
+	if l.Range.Start.Line != 2 || l.Range.Start.Character != 4 ||
+		l.Range.End.Line != 2 || l.Range.End.Character != 31 {
+		t.Errorf("code span label: expected Range {2,4}->{2,31}, got %v->%v",
+			l.Range.Start, l.Range.End)
+	}
+}
+
+func TestParseMarkdownLinkLabelRawHTML(t *testing.T) {
+	content := []byte("[<b>x</b>](docs/html.md)\n")
+	_, links, _, _ := ParseMarkdown("file:///t.md", content)
+	if len(links) != 1 {
+		t.Fatalf("expected 1 link, got %d", len(links))
+	}
+	l := links[0]
+	if l.Path != "docs/html.md" {
+		t.Errorf("expected path 'docs/html.md', got '%s'", l.Path)
+	}
+	if l.PathRange.Start.Line != 0 || l.PathRange.Start.Character != 11 ||
+		l.PathRange.End.Line != 0 || l.PathRange.End.Character != 23 {
+		t.Errorf("raw HTML label: expected PathRange {0,11}->{0,23}, got %v->%v",
+			l.PathRange.Start, l.PathRange.End)
+	}
+}
+
+func TestParseMarkdownLinkLabelOnlyCodeSpan(t *testing.T) {
+	// A label that is entirely a code span: its Text child segment starts at
+	// the code content and stops at the closing backticks, so linkLabelSpan
+	// must walk back to the '[' and forward over the '`'s to reach ']'.
+	content := []byte("[`x`](docs/only.md)\n")
+	_, links, _, _ := ParseMarkdown("file:///t.md", content)
+	if len(links) != 1 {
+		t.Fatalf("expected 1 link, got %d", len(links))
+	}
+	l := links[0]
+	if l.Path != "docs/only.md" {
+		t.Errorf("expected path 'docs/only.md', got '%s'", l.Path)
+	}
+	if l.PathRange.Start.Line != 0 || l.PathRange.Start.Character != 6 ||
+		l.PathRange.End.Line != 0 || l.PathRange.End.Character != 18 {
+		t.Errorf("code-span-only label: expected PathRange {0,6}->{0,18}, got %v->%v",
+			l.PathRange.Start, l.PathRange.End)
+	}
+	if l.Range.Start.Line != 0 || l.Range.Start.Character != 0 ||
+		l.Range.End.Line != 0 || l.Range.End.Character != 19 {
+		t.Errorf("code-span-only label: expected Range {0,0}->{0,19}, got %v->%v",
+			l.Range.Start, l.Range.End)
+	}
+}
+
 func TestParseMarkdownFallbackTitle(t *testing.T) {
 	content := []byte(`## Subheading Only
 

@@ -79,7 +79,7 @@ func extractLink(content []byte, lineOffsets LineOffsetTable, ln *ast.Link) Extr
 	// titles, angle-bracket destinations, escapes, and destinations split
 	// across lines. No source search is involved, so links never shadow or
 	// displace each other.
-	if labelStart, closeBracket, ok := linkLabelSpan(ln); ok {
+	if labelStart, closeBracket, ok := linkLabelSpan(content, ln); ok {
 		if _, pathStart, pathEnd, end, ok := findLinkSpan(content, closeBracket); ok {
 			link.Range = positionRange(content, lineOffsets, labelStart, end)
 			link.PathRange = positionRange(content, lineOffsets, pathStart, pathEnd)
@@ -125,10 +125,14 @@ func positionRange(content []byte, lineOffsets LineOffsetTable, start, end int) 
 }
 
 // linkLabelSpan returns the raw source byte offsets of a link's label: the
-// opening '[' and the closing ']'. The link's child segments (text, code,
-// raw HTML) point into the original source, so the '[' is the byte right
-// before the first segment and the ']' the byte right after the last.
-func linkLabelSpan(n ast.Node) (openBracket, closeBracket int, ok bool) {
+// opening '[' and the closing ']'. The link's child segments (text, raw HTML)
+// point into the original source, so the '[' is the byte right before the
+// first segment and the ']' the byte right after the last. Code span contents
+// are Text children whose segments start at the first content byte and stop
+// at the closing backtick run, so when the label starts or ends with a code
+// span the label bounds are one step further out: walk back to the '[' and
+// forward over the closing backticks.
+func linkLabelSpan(content []byte, n ast.Node) (openBracket, closeBracket int, ok bool) {
 	first, last := -1, -1
 	_ = ast.Walk(n, func(m ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
@@ -138,12 +142,6 @@ func linkLabelSpan(n ast.Node) (openBracket, closeBracket int, ok bool) {
 		switch t := m.(type) {
 		case *ast.Text:
 			segs = []text.Segment{t.Segment}
-		case *ast.CodeSpan:
-			if lines := t.Lines(); lines != nil {
-				for i := range lines.Len() {
-					segs = append(segs, lines.At(i))
-				}
-			}
 		case *ast.RawHTML:
 			for i := range t.Segments.Len() {
 				segs = append(segs, t.Segments.At(i))
@@ -162,7 +160,18 @@ func linkLabelSpan(n ast.Node) (openBracket, closeBracket int, ok bool) {
 	if first == -1 {
 		return 0, 0, false
 	}
-	return first - 1, last, true
+	open := first - 1
+	for open >= 0 && content[open] != '[' {
+		open--
+	}
+	if open < 0 {
+		return 0, 0, false
+	}
+	close := last
+	for close < len(content) && content[close] == '`' {
+		close++
+	}
+	return open, close, true
 }
 
 // findLinkSpan locates the source byte span of an inline link starting at the
