@@ -3,6 +3,7 @@ disable_tools = ["go"]
 
 [tools]
 "go:golang.org/x/tools/cmd/goimports" = "latest"
+"go:golang.org/x/tools/gopls" = "latest"
 
 [tasks.build]
 description = "Compile the LSP binary locally"
@@ -15,6 +16,17 @@ run = "go build -o ~/go/bin/xsmd ./cmd/xsmd-lsp"
 [tasks.format]
 description = "Format code and organize imports"
 run = "goimports -w . && go fmt ./..."
+
+[tasks.lint]
+description = "Run go vet and gopls static analysis"
+run = """
+go vet ./...
+out=$(gopls check -severity=hint $(git ls-files '*.go'))
+if [ -n "$out" ]; then
+  printf '%s\n' "$out"
+  exit 1
+fi
+"""
 
 [tasks.tidy]
 description = "Download missing modules and remove unused ones"
