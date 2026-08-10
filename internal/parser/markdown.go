@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 	"unicode/utf16"
-	"unicode/utf8"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 	"github.com/yuin/goldmark"
@@ -28,87 +27,21 @@ func ParseMarkdown(uri string, content []byte) (ast.Node, []ExtractedLink, strin
 	doc := md.Parser().Parse(reader)
 
 	lineOffsets := NewLineOffsetTable(content)
-	getLineFromOffset := lineOffsets.GetLineFromOffset
 
 	var extractedLinks []ExtractedLink
 	var docTitle string
 	var hasH1 bool
 
 	_ = ast.Walk(doc, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
-		// Extract links
-		if entering && n.Kind() == ast.KindLink {
-			ln := n.(*ast.Link)
-			destPath := string(ln.Destination)
-
-			var startLine, endLine uint32
-			var startChar, endChar uint32
-			var pathStartLine, pathEndLine uint32
-			var pathStartChar, pathEndChar uint32
-
-			// The link's label segments point into the raw source, so the
-			// construct is located exactly: '[' before the first label byte,
-			// ']' after the last. findLinkSpan then parses the destination and
-			// optional title following goldmark's inline link grammar, so
-			// ranges stay precise for titles, angle-bracket destinations,
-			// escapes, and destinations split across lines. No source search is
-			// involved, so links never shadow or displace each other.
-			var startByte, endByte int
-			var pathStartByte, pathEndByte int
-			found := false
-			if labelStart, closeBracket, ok := linkLabelSpan(n); ok {
-				if _, candPathStart, candPathEnd, candEnd, ok := findLinkSpan(content, closeBracket); ok {
-					startByte, endByte = labelStart, candEnd
-					pathStartByte, pathEndByte = candPathStart, candPathEnd
-					found = true
-				}
-			}
-
-			if found {
-				startLine = getLineFromOffset(startByte)
-				endLine = getLineFromOffset(endByte)
-				// LSP positions count UTF-16 code units, not bytes.
-				startChar = utf16Len(content[lineOffsets[startLine]:startByte])
-				endChar = utf16Len(content[lineOffsets[endLine]:endByte])
-
-				pathStartLine = getLineFromOffset(pathStartByte)
-				pathEndLine = getLineFromOffset(pathEndByte)
-				pathStartChar = utf16Len(content[lineOffsets[pathStartLine]:pathStartByte])
-				pathEndChar = utf16Len(content[lineOffsets[pathEndLine]:pathEndByte])
-			} else {
-				// Fallback to parent block line range
-				parent := n.Parent()
-				for parent != nil && parent.Type() == ast.TypeInline {
-					parent = parent.Parent()
-				}
-				if parent != nil && parent.Lines().Len() > 0 {
-					first := parent.Lines().At(0)
-					last := parent.Lines().At(parent.Lines().Len() - 1)
-					startLine = getLineFromOffset(first.Start)
-					endLine = getLineFromOffset(last.Stop)
-				}
-				startChar = 0
-				endChar = 999
-				pathStartLine = startLine
-				pathEndLine = endLine
-				pathStartChar = startChar
-				pathEndChar = endChar
-			}
-
-			extractedLinks = append(extractedLinks, ExtractedLink{
-				Path: destPath,
-				Range: protocol.Range{
-					Start: protocol.Position{Line: startLine, Character: startChar},
-					End:   protocol.Position{Line: endLine, Character: endChar},
-				},
-				PathRange: protocol.Range{
-					Start: protocol.Position{Line: pathStartLine, Character: pathStartChar},
-					End:   protocol.Position{Line: pathEndLine, Character: pathEndChar},
-				},
-			})
+		if !entering {
+			return ast.WalkContinue, nil
 		}
 
-		// Extract the main H1 Title
-		if entering && n.Kind() == ast.KindHeading {
+		switch n.Kind() {
+		case ast.KindLink:
+			extractedLinks = append(extractedLinks, extractLink(content, lineOffsets, n.(*ast.Link)))
+
+		case ast.KindHeading:
 			heading := n.(*ast.Heading)
 			if heading.Level == 1 && docTitle == "" {
 				var headingText strings.Builder
@@ -130,6 +63,65 @@ func ParseMarkdown(uri string, content []byte) (ast.Node, []ExtractedLink, strin
 	}
 
 	return doc, extractedLinks, docTitle, hasH1
+}
+
+// extractLink computes the source ranges of an inline link: the whole
+// '[label](destination)' construct and the destination path alone. Both are
+// exact when the construct can be located in the raw source, and fall back to
+// the parent block's line range otherwise (e.g. reference-style links).
+func extractLink(content []byte, lineOffsets LineOffsetTable, ln *ast.Link) ExtractedLink {
+	link := ExtractedLink{Path: string(ln.Destination)}
+
+	// The link's label segments point into the raw source, so the construct
+	// is located exactly: '[' before the first label byte, ']' after the
+	// last. findLinkSpan then parses the destination and optional title
+	// following goldmark's inline link grammar, so ranges stay precise for
+	// titles, angle-bracket destinations, escapes, and destinations split
+	// across lines. No source search is involved, so links never shadow or
+	// displace each other.
+	if labelStart, closeBracket, ok := linkLabelSpan(ln); ok {
+		if _, pathStart, pathEnd, end, ok := findLinkSpan(content, closeBracket); ok {
+			link.Range = positionRange(content, lineOffsets, labelStart, end)
+			link.PathRange = positionRange(content, lineOffsets, pathStart, pathEnd)
+			return link
+		}
+	}
+
+	// Fallback to parent block line range
+	parent := ln.Parent()
+	for parent != nil && parent.Type() == ast.TypeInline {
+		parent = parent.Parent()
+	}
+	var startLine, endLine uint32
+	if parent != nil && parent.Lines().Len() > 0 {
+		first := parent.Lines().At(0)
+		last := parent.Lines().At(parent.Lines().Len() - 1)
+		startLine = lineOffsets.GetLineFromOffset(first.Start)
+		endLine = lineOffsets.GetLineFromOffset(last.Stop)
+	}
+	link.Range = protocol.Range{
+		Start: protocol.Position{Line: startLine, Character: 0},
+		End:   protocol.Position{Line: endLine, Character: 999},
+	}
+	link.PathRange = link.Range
+	return link
+}
+
+// positionRange converts a byte span into an LSP range. LSP positions count
+// UTF-16 code units, not bytes.
+func positionRange(content []byte, lineOffsets LineOffsetTable, start, end int) protocol.Range {
+	startLine := lineOffsets.GetLineFromOffset(start)
+	endLine := lineOffsets.GetLineFromOffset(end)
+	return protocol.Range{
+		Start: protocol.Position{
+			Line:      startLine,
+			Character: utf16Len(content[lineOffsets[startLine]:start]),
+		},
+		End: protocol.Position{
+			Line:      endLine,
+			Character: utf16Len(content[lineOffsets[endLine]:end]),
+		},
+	}
 }
 
 // linkLabelSpan returns the raw source byte offsets of a link's label: the
@@ -303,10 +295,8 @@ func findLinkSpan(content []byte, closeBracket int) (start, pathStart, pathEnd, 
 // position encoding (astral runes count as two units).
 func utf16Len(b []byte) uint32 {
 	var n uint32
-	for len(b) > 0 {
-		r, size := utf8.DecodeRune(b)
+	for _, r := range string(b) {
 		n += uint32(utf16.RuneLen(r))
-		b = b[size:]
 	}
 	return n
 }
