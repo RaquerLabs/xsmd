@@ -20,7 +20,7 @@ func main() {
 	}
 
 	serverState := state.NewServerState()
-	serverState.DebugLog = debug
+	serverState.DebugLog = logToFile
 	handler := lsp.BuildHandler(serverState)
 
 	s := server.NewServer(handler, "xsmd-lsp", false)
@@ -62,10 +62,6 @@ func listNotes() {
 			}
 		}
 	}
-}
-
-func debug(msg string) {
-	logToFile(msg)
 }
 
 func logToFile(msg string) {

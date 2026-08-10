@@ -4,7 +4,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/RaquerLabs/xsmd/internal/parser"
 )
@@ -46,31 +45,17 @@ func (s *ServerState) CrawlWorkspace() error {
 
 		// If this is a directory, check if it should be completely skipped
 		if d.IsDir() {
-			relSlash := filepath.ToSlash(rel)
-			for _, ignored := range ignoreDirs {
-				cleanIgnored := strings.Trim(ignored, "/")
-				if cleanIgnored == "" {
-					continue
-				}
-				if relSlash == cleanIgnored || strings.HasPrefix(relSlash, cleanIgnored+"/") {
-					return filepath.SkipDir
-				}
+			if isIgnoredRelPath(filepath.ToSlash(rel), ignoreDirs) {
+				return filepath.SkipDir
 			}
 			return nil
 		}
 
 		// Check if it's a Markdown file
-		if strings.HasSuffix(d.Name(), ".md") || strings.HasSuffix(d.Name(), ".markdown") {
+		if IsMarkdownPath(d.Name()) {
 			// Redundancy check: make sure the file itself isn't ignored
-			relSlash := filepath.ToSlash(rel)
-			for _, ignored := range ignoreDirs {
-				cleanIgnored := strings.Trim(ignored, "/")
-				if cleanIgnored == "" {
-					continue
-				}
-				if relSlash == cleanIgnored || strings.HasPrefix(relSlash, cleanIgnored+"/") {
-					return nil
-				}
+			if isIgnoredRelPath(filepath.ToSlash(rel), ignoreDirs) {
+				return nil
 			}
 
 			uri := "file://" + path

@@ -47,7 +47,8 @@ func (s *ServerState) LoadConfig() {
 			s.Debug = (val == "true")
 		case "ignore":
 			val = strings.TrimSpace(val)
-			if strings.HasPrefix(val, "[") && strings.HasSuffix(val, "]") {
+			isArray := strings.HasPrefix(val, "[") && strings.HasSuffix(val, "]")
+			if isArray {
 				arrStr := val[1 : len(val)-1]
 				parts := strings.Split(arrStr, ",")
 				var list []string
@@ -67,11 +68,15 @@ func (s *ServerState) LoadConfig() {
 	}
 }
 
-// IsIgnored checks if the relative path relToRoot is within any of the configured ignored directories.
-// The caller must hold at least a read lock (s.Mu.RLock()).
-func (s *ServerState) IsIgnored(relToRoot string) bool {
-	relToRootSlash := filepath.ToSlash(relToRoot)
-	for _, ignored := range s.IgnoreDirs {
+// IsMarkdownPath reports whether path names a Markdown file.
+func IsMarkdownPath(path string) bool {
+	return strings.HasSuffix(path, ".md") || strings.HasSuffix(path, ".markdown")
+}
+
+// isIgnoredRelPath reports whether the workspace-relative, slash-separated path
+// falls inside any of the ignored directories.
+func isIgnoredRelPath(relToRootSlash string, ignoreDirs []string) bool {
+	for _, ignored := range ignoreDirs {
 		cleanIgnored := strings.Trim(ignored, "/")
 		if cleanIgnored == "" {
 			continue
@@ -81,4 +86,10 @@ func (s *ServerState) IsIgnored(relToRoot string) bool {
 		}
 	}
 	return false
+}
+
+// IsIgnored checks if the relative path relToRoot is within any of the configured ignored directories.
+// The caller must hold at least a read lock (s.Mu.RLock()).
+func (s *ServerState) IsIgnored(relToRoot string) bool {
+	return isIgnoredRelPath(filepath.ToSlash(relToRoot), s.IgnoreDirs)
 }

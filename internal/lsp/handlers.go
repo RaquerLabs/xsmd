@@ -118,19 +118,19 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 		TextDocumentDidChange: func(context *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
 			uri := params.TextDocument.URI
 
-			if len(params.ContentChanges) > 0 {
-				change := params.ContentChanges[0].(protocol.TextDocumentContentChangeEventWhole)
-
-				sState.Mu.Lock()
-				err := sState.ParseAndIndexContent(uri, []byte(change.Text))
-				sState.Mu.Unlock()
-
-				if err == nil {
-					PublishDiagnostics(sState, context, uri)
-				}
-				return err
+			if len(params.ContentChanges) == 0 {
+				return nil
 			}
-			return nil
+			change := params.ContentChanges[0].(protocol.TextDocumentContentChangeEventWhole)
+
+			sState.Mu.Lock()
+			err := sState.ParseAndIndexContent(uri, []byte(change.Text))
+			sState.Mu.Unlock()
+
+			if err == nil {
+				PublishDiagnostics(sState, context, uri)
+			}
+			return err
 		},
 
 		// Triggered by Neovim to fetch collapsible regions (Headers AND Lists)
@@ -303,7 +303,7 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 		// Triggered when you save a file in Neovim (:w)
 		TextDocumentDidSave: func(context *glsp.Context, params *protocol.DidSaveTextDocumentParams) error {
 			uri := params.TextDocument.URI
-			if !strings.HasSuffix(uri, ".md") && !strings.HasSuffix(uri, ".markdown") {
+			if !state.IsMarkdownPath(uri) {
 				return nil
 			}
 
@@ -330,7 +330,7 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 
 			for _, change := range params.Changes {
 				uri := change.URI
-				if !strings.HasSuffix(uri, ".md") && !strings.HasSuffix(uri, ".markdown") {
+				if !state.IsMarkdownPath(uri) {
 					continue
 				}
 				path := strings.TrimPrefix(uri, "file://")
@@ -357,7 +357,7 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 
 			for _, file := range params.Files {
 				uri := file.URI
-				if !strings.HasSuffix(uri, ".md") && !strings.HasSuffix(uri, ".markdown") {
+				if !state.IsMarkdownPath(uri) {
 					continue
 				}
 				path := strings.TrimPrefix(uri, "file://")
@@ -375,7 +375,7 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 
 			for _, file := range params.Files {
 				uri := file.URI
-				if !strings.HasSuffix(uri, ".md") && !strings.HasSuffix(uri, ".markdown") {
+				if !state.IsMarkdownPath(uri) {
 					continue
 				}
 				delete(sState.Index, uri)

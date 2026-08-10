@@ -37,11 +37,7 @@ func PublishDiagnostics(sState *state.ServerState, context *glsp.Context, uri st
 			continue
 		}
 
-		filePath := link.Path
-		if idx := strings.Index(filePath, "#"); idx != -1 {
-			filePath = filePath[:idx]
-		}
-
+		filePath, _ := state.SplitAnchor(link.Path)
 		if filePath == "" {
 			continue
 		}
@@ -49,16 +45,13 @@ func PublishDiagnostics(sState *state.ServerState, context *glsp.Context, uri st
 		targetAbsPath := sState.ResolveLinkPath(uri, filePath)
 		targetURI := "file://" + targetAbsPath
 
+		// The map value is struct{}; presence is carried by the bool.
 		_, existsInIndex := indexKeys[targetURI]
-
+		existsOnDisk := true
 		var statErr error
-		existsOnDisk := false
 		if !existsInIndex {
-			if _, err := os.Stat(targetAbsPath); err == nil {
-				existsOnDisk = true
-			} else {
-				statErr = err
-			}
+			_, statErr = os.Stat(targetAbsPath)
+			existsOnDisk = statErr == nil
 		}
 
 		sState.Log(fmt.Sprintf("[Diagnostics] Link path: %s -> Abs: %s, URI: %s, InIndex: %v, OnDisk: %v (err: %v)",
@@ -89,9 +82,6 @@ func PublishDiagnostics(sState *state.ServerState, context *glsp.Context, uri st
 }
 
 func isExternalLink(path string) bool {
-	return strings.HasPrefix(path, "http://") ||
-		strings.HasPrefix(path, "https://") ||
-		strings.HasPrefix(path, "mailto:") ||
-		strings.HasPrefix(path, "ftp://") ||
-		strings.Contains(path, "://")
+	// mailto: is the only scheme without :// in the URI.
+	return strings.Contains(path, "://") || strings.HasPrefix(path, "mailto:")
 }

@@ -17,7 +17,8 @@ func CleanURIPath(uri string) string {
 		}
 	}
 	// On Windows, a URI might look like /C:/path. Trim the leading slash if followed by drive letter.
-	if len(p) >= 3 && p[0] == '/' && p[2] == ':' && ((p[1] >= 'a' && p[1] <= 'z') || (p[1] >= 'A' && p[1] <= 'Z')) {
+	isWindowsDrivePath := len(p) >= 3 && p[0] == '/' && isASCIILetter(p[1]) && p[2] == ':'
+	if isWindowsDrivePath {
 		p = p[1:]
 	}
 	if !strings.HasPrefix(p, "/") && !filepath.IsAbs(p) {
@@ -26,18 +27,22 @@ func CleanURIPath(uri string) string {
 	return filepath.Clean(p)
 }
 
-// CleanURIPath converts a URI to a standardized absolute filesystem path.
-func (s *ServerState) CleanURIPath(uri string) string {
-	return CleanURIPath(uri)
+func isASCIILetter(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
 }
 
+// SplitAnchor separates a link path from its trailing #anchor, if present.
+func SplitAnchor(linkPath string) (path, anchor string) {
+	if idx := strings.Index(linkPath, "#"); idx != -1 {
+		return linkPath[:idx], linkPath[idx:]
+	}
+	return linkPath, ""
+}
 
 // ResolveLinkPath resolves a link path (which may be relative to the source URI or absolute to workspace root)
 // to a standardized absolute filesystem path. It also strips anchors.
 func (s *ServerState) ResolveLinkPath(sourceURI string, linkPath string) string {
-	if idx := strings.Index(linkPath, "#"); idx != -1 {
-		linkPath = linkPath[:idx]
-	}
+	linkPath, _ = SplitAnchor(linkPath)
 
 	if strings.HasPrefix(linkPath, "/") {
 		cleanPath := filepath.Clean(linkPath)
