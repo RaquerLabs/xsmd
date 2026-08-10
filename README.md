@@ -30,6 +30,25 @@ debug = false
 ignore = []
 ```
 
+The same settings can be provided per-editor through the LSP
+`initializationOptions` payload, which override `xsmd.toml`:
+
+```json
+{ "debug": true, "ignore": ["/journal"] }
+```
+
+In Neovim this is passed via `init_options`:
+
+```lua
+local lsp_config = {
+  name = "xsmd",
+  cmd = { "xsmd" },
+  filetypes = { "markdown" },
+  init_options = { debug = false, ignore = {} },
+}
+vim.lsp.start(lsp_config)
+```
+
 ### Neovim Setup
 
 To ensure Neovim launches a single `xsmd` process and correctly shares/reuses it across all open Markdown buffers, configure the server with a dynamically resolved `root_dir`, specify `name = "xsmd"`, and disable `single_file_support`:
@@ -82,6 +101,12 @@ The server provides a list of commands for debug:
   - Typing `(` inside a link (e.g., `[Label](`) autocompletes with paths, also adds the folder-relative snippet.
 - Rename:
   Moves files and automatically updates all reference links across the workspace.
+
+## Todo
+
+- [ ] Anchor completion: complete `#heading` anchors — in-file headings for
+      `[](#`, and target-file headings for links like `[x](file.md#` — backed
+      by a per-document heading index.
 
 ## How It Works Under the Hood
 
@@ -137,6 +162,18 @@ List indexed workspace files (ignoring configured directories):
 
 ```bash
 ./dist/xsmd list
+```
+
+List workspace files as JSON (`path`, `title`, `has_h1`), sorted by path:
+
+```bash
+./dist/xsmd list --json
+```
+
+Print the version:
+
+```bash
+./dist/xsmd --version
 ```
 
 To install it globally:

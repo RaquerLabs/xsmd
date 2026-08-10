@@ -3,6 +3,7 @@ package lsp
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -1333,13 +1334,26 @@ func TestWorkspaceExecuteCommandDumpState(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	resStr, ok := res.(string)
+	dump, ok := res.(map[string]any)
 	if !ok {
-		t.Fatalf("expected string result, got %T", res)
+		t.Fatalf("expected map result, got %T", res)
 	}
 
-	if resStr != "State dumped to xsmd.log" {
-		t.Errorf("expected result 'State dumped to xsmd.log', got '%s'", resStr)
+	if count, ok := dump["count"].(int); !ok || count != 3 {
+		t.Errorf("expected count 3, got %#v", dump["count"])
+	}
+
+	uris, ok := dump["uris"].([]string)
+	if !ok {
+		t.Fatalf("expected uris []string, got %T", dump["uris"])
+	}
+	expectedURIs := []string{
+		"file:///workspace/file1.md",
+		"file:///workspace/file2.md",
+		"file:///workspace/sub/file3.md",
+	}
+	if !slices.Equal(uris, expectedURIs) {
+		t.Errorf("expected sorted uris %v, got %v", expectedURIs, uris)
 	}
 
 	if !strings.Contains(loggedMsg, "file:///workspace/file1.md") ||

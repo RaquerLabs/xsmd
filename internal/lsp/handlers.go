@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/RaquerLabs/xsmd/internal/parser"
@@ -55,6 +56,7 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 			}
 
 			sState.LoadConfig()
+			sState.ApplyInitializationOptions(params.InitializationOptions)
 
 			// Kick off the workspace crawl asynchronously
 			go func() {
@@ -408,13 +410,17 @@ func BuildHandler(sState *state.ServerState) *protocol.Handler {
 				for k := range sState.Index {
 					keys = append(keys, k)
 				}
+				sort.Strings(keys)
 				debugLog := sState.DebugLog
 				sState.Mu.RUnlock()
 
 				if debugLog != nil {
 					debugLog(fmt.Sprintf("Current Index Keys: %v", keys))
 				}
-				return "State dumped to xsmd.log", nil
+				return map[string]any{
+					"count": len(keys),
+					"uris":  keys,
+				}, nil
 			}
 			return nil, nil
 		},

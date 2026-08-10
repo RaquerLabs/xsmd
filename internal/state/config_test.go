@@ -112,3 +112,73 @@ func TestLoadConfigIgnoreDirs(t *testing.T) {
 		}
 	}
 }
+
+func TestApplyInitializationOptions(t *testing.T) {
+	s := NewServerState()
+
+	s.ApplyInitializationOptions(map[string]any{
+		"debug":  true,
+		"ignore": []any{"/journal", "/templates/daily"},
+	})
+
+	if !s.Debug {
+		t.Errorf("expected Debug to be true")
+	}
+	expected := []string{"/journal", "/templates/daily"}
+	if len(s.IgnoreDirs) != len(expected) {
+		t.Fatalf("expected %d ignore dirs, got %d", len(expected), len(s.IgnoreDirs))
+	}
+	for i, v := range expected {
+		if s.IgnoreDirs[i] != v {
+			t.Errorf("expected IgnoreDirs[%d] to be '%s', got '%s'", i, v, s.IgnoreDirs[i])
+		}
+	}
+}
+
+func TestApplyInitializationOptionsOverridesConfig(t *testing.T) {
+	tempDir, err := os.MkdirTemp(".", "xsmd-config-init-test-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// xsmd.toml enables debug and ignores /journal
+	tomlContent := []byte("ignore = [\"/journal\"]\ndebug = true\n")
+	if err := os.WriteFile(filepath.Join(tempDir, "xsmd.toml"), tomlContent, 0644); err != nil {
+		t.Fatalf("failed to write xsmd.toml: %v", err)
+	}
+
+	s := NewServerState()
+	s.WorkspaceRoot = tempDir
+	s.LoadConfig()
+
+	// Client options win: disable debug, ignore /notes instead
+	s.ApplyInitializationOptions(map[string]any{
+		"debug":  false,
+		"ignore": []any{"/notes"},
+	})
+
+	if s.Debug {
+		t.Errorf("expected client debug=false to override toml debug=true")
+	}
+	expected := []string{"/notes"}
+	if len(s.IgnoreDirs) != len(expected) || s.IgnoreDirs[0] != expected[0] {
+		t.Errorf("expected ignore %v, got %v", expected, s.IgnoreDirs)
+	}
+}
+
+func TestApplyInitializationOptionsNilAndUnknown(t *testing.T) {
+	s := NewServerState()
+
+	// nil options are a no-op
+	s.ApplyInitializationOptions(nil)
+	if s.Debug || len(s.IgnoreDirs) != 0 {
+		t.Errorf("expected no-op for nil options, got Debug=%v IgnoreDirs=%v", s.Debug, s.IgnoreDirs)
+	}
+
+	// Unknown fields and non-decodable values must not panic or corrupt state
+	s.ApplyInitializationOptions(map[string]any{"debug": true, "bogus": "x", "ignore": 42})
+	if !s.Debug {
+		t.Errorf("expected debug to be applied despite unknown fields")
+	}
+}

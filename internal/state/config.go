@@ -2,11 +2,49 @@ package state
 
 import (
 	"bufio"
+	"encoding/json"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 )
+
+// ApplyInitializationOptions applies client-provided settings sent in the LSP
+// initialize request (initializationOptions). Applied after LoadConfig, so a
+// client can enable debug or restrict the ignore list without a
+// repository-local xsmd.toml. Fields are decoded independently: an invalid
+// value for one setting is ignored without affecting the others.
+func (s *ServerState) ApplyInitializationOptions(raw any) {
+	if raw == nil {
+		return
+	}
+
+	b, err := json.Marshal(raw)
+	if err != nil {
+		return
+	}
+
+	var opts map[string]json.RawMessage
+	if err := json.Unmarshal(b, &opts); err != nil {
+		return
+	}
+
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
+	if v, ok := opts["debug"]; ok {
+		var debug bool
+		if json.Unmarshal(v, &debug) == nil {
+			s.Debug = debug
+		}
+	}
+	if v, ok := opts["ignore"]; ok {
+		var ignore []string
+		if json.Unmarshal(v, &ignore) == nil {
+			s.IgnoreDirs = ignore
+		}
+	}
+}
 
 // LoadConfig reads xsmd.toml from the workspace root and updates the Debug state and ignore list.
 func (s *ServerState) LoadConfig() {
