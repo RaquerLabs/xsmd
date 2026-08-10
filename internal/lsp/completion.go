@@ -157,9 +157,31 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 
 		// If we found a valid open '[' or '(', we specify a TextEdit starting after it.
 		if startChar != -1 {
+			endChar := characterPos
+			// Completing inside an existing link destination: extend the edit
+			// to the closing ')' so the whole current path is replaced.
+			// Otherwise the text after the cursor survives, e.g. editing
+			// `(hello/tes|t.md)` would yield `(newopt/smth.mdt.md)` instead of
+			// `(newopt/smth.md)`.
+			if triggerType == '(' {
+				depth := 0
+			scan:
+				for i := characterPos; i < len(currentLine); i++ {
+					switch currentLine[i] {
+					case '(':
+						depth++
+					case ')':
+						if depth == 0 {
+							endChar = i
+							break scan
+						}
+						depth--
+					}
+				}
+			}
 			editRange := protocol.Range{
 				Start: protocol.Position{Line: params.Position.Line, Character: uint32(startChar + 1)},
-				End:   params.Position,
+				End:   protocol.Position{Line: params.Position.Line, Character: uint32(endChar)},
 			}
 			item.TextEdit = &protocol.TextEdit{
 				Range:   editRange,

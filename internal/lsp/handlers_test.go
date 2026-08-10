@@ -1439,3 +1439,118 @@ func TestTextDocumentCompletionParenthesisTrigger(t *testing.T) {
 		t.Errorf("expected to find completion item for 'file2.md'")
 	}
 }
+
+func TestTextDocumentCompletionReplacesWholeDestination(t *testing.T) {
+	s := setupTestState()
+	handler := BuildHandler(s)
+
+	// Cursor inside a closed destination, between 'f' and 'i' of "fiX.md":
+	// Line 0: [link](fi|X.md)
+	_ = s.ParseAndIndexContent("file:///workspace/file4.md", []byte("[link](fiX.md)"))
+
+	params := &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/file4.md",
+			},
+			Position: protocol.Position{
+				Line:      0,
+				Character: 9, // between 'f' (7) and 'i' (8)
+			},
+		},
+	}
+
+	res, err := handler.TextDocumentCompletion(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	list, ok := res.(protocol.CompletionList)
+	if !ok {
+		t.Fatalf("expected protocol.CompletionList, got %T", res)
+	}
+
+	var foundFile2 bool
+	for _, item := range list.Items {
+		if item.Label != "file2.md" {
+			continue
+		}
+		foundFile2 = true
+		if item.TextEdit == nil {
+			t.Fatalf("expected TextEdit to be set")
+		}
+		te, ok := item.TextEdit.(*protocol.TextEdit)
+		if !ok {
+			t.Fatalf("expected *protocol.TextEdit, got %T", item.TextEdit)
+		}
+		// The edit must cover the whole destination: after '(' (7) up to the
+		// closing ')' (13), so applying it to "[link](fiX.md)" yields
+		// "[link](file2.md)" and not "[link](file2.mdX.md)".
+		if te.Range.Start.Character != 7 {
+			t.Errorf("expected TextEdit start character 7, got %d", te.Range.Start.Character)
+		}
+		if te.Range.End.Character != 13 {
+			t.Errorf("expected TextEdit end character 13, got %d", te.Range.End.Character)
+		}
+		if te.NewText != "file2.md" {
+			t.Errorf("unexpected NewText: %s", te.NewText)
+		}
+
+		line := "[link](fiX.md)"
+		applied := line[:te.Range.Start.Character] + te.NewText + line[te.Range.End.Character:]
+		if applied != "[link](file2.md)" {
+			t.Errorf("applying the edit gave %q, want %q", applied, "[link](file2.md)")
+		}
+	}
+	if !foundFile2 {
+		t.Errorf("expected to find completion item for 'file2.md'")
+	}
+}
+
+func TestTextDocumentCompletionUnclosedDestinationEndsAtCursor(t *testing.T) {
+	s := setupTestState()
+	handler := BuildHandler(s)
+
+	// Unclosed destination: [link](fi with the cursor at the end of the line.
+	_ = s.ParseAndIndexContent("file:///workspace/file4.md", []byte("[link](fi"))
+
+	params := &protocol.CompletionParams{
+		TextDocumentPositionParams: protocol.TextDocumentPositionParams{
+			TextDocument: protocol.TextDocumentIdentifier{
+				URI: "file:///workspace/file4.md",
+			},
+			Position: protocol.Position{
+				Line:      0,
+				Character: 9,
+			},
+		},
+	}
+
+	res, err := handler.TextDocumentCompletion(nil, params)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	list, ok := res.(protocol.CompletionList)
+	if !ok {
+		t.Fatalf("expected protocol.CompletionList, got %T", res)
+	}
+
+	var foundFile2 bool
+	for _, item := range list.Items {
+		if item.Label != "file2.md" {
+			continue
+		}
+		foundFile2 = true
+		te, ok := item.TextEdit.(*protocol.TextEdit)
+		if !ok || te == nil {
+			t.Fatalf("expected TextEdit to be set")
+		}
+		if te.Range.End.Character != 9 {
+			t.Errorf("expected TextEdit end character 9 (cursor), got %d", te.Range.End.Character)
+		}
+	}
+	if !foundFile2 {
+		t.Errorf("expected to find completion item for 'file2.md'")
+	}
+}
