@@ -1,0 +1,37 @@
+pre-commit:
+  parallel: false
+  commands:
+    trailing-whitespace:
+      tags: style
+      run: |
+        for file in {staged_files}; do
+          [ -f "$file" ] || continue
+          perl -pi -e 's/[ \t]+$//' "$file" && git add "$file"
+        done
+
+    end-of-file-fixer:
+      tags: style
+      run: |
+        for file in {staged_files}; do
+          tail -c1 "$file" | read -r _ || echo "" >> "$file"
+          git add "$file"
+        done
+
+    check-yaml:
+      tags: linters
+      glob: "*.{yaml,yml}"
+      run: npx yaml-lint {staged_files}
+
+    check-added-large-files:
+      tags: security
+      run: |
+        for file in {staged_files}; do
+          if [ $(wc -c < "$file") -gt 5120000 ]; then
+            echo "$file is larger than 5MB" && exit 1
+          fi
+        done
+
+commit-msg:
+  commands:
+    conventional-commit:
+      run: npx commitlint --default-config --edit {1}
