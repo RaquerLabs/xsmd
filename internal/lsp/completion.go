@@ -24,10 +24,7 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 		lines := strings.Split(string(doc.Content), "\n")
 		if int(params.Position.Line) < len(lines) {
 			currentLine = lines[params.Position.Line]
-			characterPos = int(params.Position.Character)
-			if characterPos > len(currentLine) {
-				characterPos = len(currentLine)
-			}
+			characterPos = min(int(params.Position.Character), len(currentLine))
 		}
 	}
 

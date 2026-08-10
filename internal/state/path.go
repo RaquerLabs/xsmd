@@ -11,8 +11,8 @@ func CleanURIPath(uri string) string {
 	p := uri
 	prefixes := []string{"file://localhost", "file:///", "file://", "file:/", "file:"}
 	for _, prefix := range prefixes {
-		if strings.HasPrefix(p, prefix) {
-			p = strings.TrimPrefix(p, prefix)
+		if rest, ok := strings.CutPrefix(p, prefix); ok {
+			p = rest
 			break
 		}
 	}
