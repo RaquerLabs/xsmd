@@ -17,46 +17,34 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 	state.Mu.RLock()
 	defer state.Mu.RUnlock()
 
-	// 1. Fetch the current line from state index using params.TextDocument.URI
-	var lines []string
-	var hasLine bool
+	// Fetch the current line from the state index
 	var currentLine string
 	var characterPos int
-
-	doc, ok := state.Index[params.TextDocument.URI]
-	if ok {
-		lines = strings.Split(string(doc.Content), "\n")
+	if doc, ok := state.Index[params.TextDocument.URI]; ok {
+		lines := strings.Split(string(doc.Content), "\n")
 		if int(params.Position.Line) < len(lines) {
 			currentLine = lines[params.Position.Line]
 			characterPos = int(params.Position.Character)
 			if characterPos > len(currentLine) {
 				characterPos = len(currentLine)
 			}
-			hasLine = true
 		}
 	}
 
-	// 2. Look backward from the cursor to find the opening '[' or '('
+	// Look backward from the cursor to find the opening '[' or '('
 	startChar := -1
 	var triggerType byte // '[' or '('
-	var query string
-	if hasLine {
-		for i := characterPos - 1; i >= 0; i-- {
-			char := currentLine[i]
-			// If we see a closing bracket/parenthesis before an opening one,
-			// it means the link/path is already closed, so don't trigger.
-			if char == ']' || char == ')' {
-				break
-			}
-
-			if char == '[' || char == '(' {
-				startChar = i
-				triggerType = char
-				break
-			}
+	for i := characterPos - 1; i >= 0; i-- {
+		char := currentLine[i]
+		// A closing bracket/parenthesis before an opening one means the
+		// link/path is already closed, so don't trigger.
+		if char == ']' || char == ')' {
+			break
 		}
-		if startChar != -1 {
-			query = currentLine[startChar+1 : characterPos]
+		if char == '[' || char == '(' {
+			startChar = i
+			triggerType = char
+			break
 		}
 	}
 
@@ -65,14 +53,11 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 		state.LogNoLock("HandleTextDocumentCompletion: No open '[' or '(' found before cursor. Returning nil.")
 		return nil, nil
 	}
+	query := currentLine[startChar+1 : characterPos]
 
 	items := []protocol.CompletionItem{}
-	var queryFiltered bool
-	var queryCleaned string
-	if strings.TrimSpace(query) != "" {
-		queryCleaned = strings.TrimSpace(query)
-		queryFiltered = true
-	}
+	queryCleaned := strings.TrimSpace(query)
+	queryFiltered := queryCleaned != ""
 
 	state.LogNoLock(fmt.Sprintf("HandleTextDocumentCompletion: Query found: '%s' (cleaned: '%s', filtered: %v)", query, queryCleaned, queryFiltered))
 
@@ -122,29 +107,18 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 			}
 		}
 
-		var markdownLink string
-		var filterText string
-		var label string
-		var itemDetail string
-		var itemKind protocol.CompletionItemKind
-
+		itemKind := protocol.CompletionItemKindFile
+		var markdownLink, filterText, label, itemDetail string
 		if triggerType == '(' {
 			markdownLink = relPathSlash
 			filterText = relPathSlash
 			label = relPathSlash
 			itemDetail = docInfo.Title
-			itemKind = protocol.CompletionItemKindFile
 		} else {
-			// Original logic for '['
-			if startChar != -1 {
-				markdownLink = fmt.Sprintf("%s](%s)", docInfo.Title, relPathSlash)
-			} else {
-				markdownLink = fmt.Sprintf("[%s](%s)", docInfo.Title, relPathSlash)
-			}
+			markdownLink = fmt.Sprintf("%s](%s)", docInfo.Title, relPathSlash)
 			filterText = docInfo.Title
 			label = docInfo.Title
 			itemDetail = relPathSlash
-			itemKind = protocol.CompletionItemKindFile
 		}
 
 		item := protocol.CompletionItem{
@@ -155,38 +129,24 @@ func HandleTextDocumentCompletion(state *state.ServerState, context *glsp.Contex
 			InsertText: &markdownLink,
 		}
 
-		// If we found a valid open '[' or '(', we specify a TextEdit starting after it.
-		if startChar != -1 {
-			endChar := characterPos
-			// Completing inside an existing link destination: extend the edit
-			// to the closing ')' so the whole current path is replaced.
-			// Otherwise the text after the cursor survives, e.g. editing
-			// `(hello/tes|t.md)` would yield `(newopt/smth.mdt.md)` instead of
-			// `(newopt/smth.md)`.
-			if triggerType == '(' {
-				depth := 0
-			scan:
-				for i := characterPos; i < len(currentLine); i++ {
-					switch currentLine[i] {
-					case '(':
-						depth++
-					case ')':
-						if depth == 0 {
-							endChar = i
-							break scan
-						}
-						depth--
-					}
-				}
+		// The edit replaces from just after the opening '[' or '(' up to the
+		// cursor, or to the closing ')' when completing a full destination so
+		// the whole current path is replaced. Otherwise the text after the
+		// cursor survives, e.g. editing `(hello/tes|t.md)` would yield
+		// `(newopt/smth.mdt.md)` instead of `(newopt/smth.md)`.
+		endChar := characterPos
+		if triggerType == '(' {
+			if close := findClosingParen(currentLine, characterPos); close != -1 {
+				endChar = close
 			}
-			editRange := protocol.Range{
-				Start: protocol.Position{Line: params.Position.Line, Character: uint32(startChar + 1)},
-				End:   protocol.Position{Line: params.Position.Line, Character: uint32(endChar)},
-			}
-			item.TextEdit = &protocol.TextEdit{
-				Range:   editRange,
-				NewText: markdownLink,
-			}
+		}
+		editRange := protocol.Range{
+			Start: protocol.Position{Line: params.Position.Line, Character: uint32(startChar + 1)},
+			End:   protocol.Position{Line: params.Position.Line, Character: uint32(endChar)},
+		}
+		item.TextEdit = &protocol.TextEdit{
+			Range:   editRange,
+			NewText: markdownLink,
 		}
 
 		items = append(items, item)
@@ -235,4 +195,23 @@ func subsequenceMatch(target, word string) bool {
 		}
 	}
 	return true
+}
+
+// findClosingParen returns the index of the ')' that closes the link
+// destination opened before from, tracking nested parens, or -1 when the
+// destination is still open at the end of the line.
+func findClosingParen(line string, from int) int {
+	depth := 0
+	for i := from; i < len(line); i++ {
+		switch line[i] {
+		case '(':
+			depth++
+		case ')':
+			if depth == 0 {
+				return i
+			}
+			depth--
+		}
+	}
+	return -1
 }

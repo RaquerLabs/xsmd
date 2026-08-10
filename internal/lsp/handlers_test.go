@@ -1444,7 +1444,7 @@ func TestTextDocumentCompletionReplacesWholeDestination(t *testing.T) {
 	s := setupTestState()
 	handler := BuildHandler(s)
 
-	// Cursor inside a closed destination, between 'f' and 'i' of "fiX.md":
+	// Cursor inside a closed destination, between 'i' and 'X' of "fiX.md":
 	// Line 0: [link](fi|X.md)
 	_ = s.ParseAndIndexContent("file:///workspace/file4.md", []byte("[link](fiX.md)"))
 
@@ -1455,7 +1455,7 @@ func TestTextDocumentCompletionReplacesWholeDestination(t *testing.T) {
 			},
 			Position: protocol.Position{
 				Line:      0,
-				Character: 9, // between 'f' (7) and 'i' (8)
+				Character: 9, // between 'i' (8) and 'X' (9)
 			},
 		},
 	}
@@ -1543,7 +1543,7 @@ func TestTextDocumentCompletionUnclosedDestinationEndsAtCursor(t *testing.T) {
 		}
 		foundFile2 = true
 		te, ok := item.TextEdit.(*protocol.TextEdit)
-		if !ok || te == nil {
+		if !ok {
 			t.Fatalf("expected TextEdit to be set")
 		}
 		if te.Range.End.Character != 9 {
