@@ -5,14 +5,14 @@
 ### Prerequisites
 
 - Go: Version `1.24.2` or later.
-- Mise (Optional): A task runner used to orchestrate build pipelines.
-  - If you don't want to use it, check the `mise.toml` for development commands.
+- Mise (optional): A task runner that runs the build pipelines.
+  - If you do not want to use it, read the `mise.toml` file for the development commands.
 
 ## Tasks Reference
 
 ### Format Code
 
-Clean imports, formatting, and standard layout settings:
+Cleans the imports, the formatting, and the standard layout settings:
 
 ```bash
 mise run format
@@ -32,7 +32,7 @@ mise run tidy
 
 ### Run Tests
 
-Runs the complete unit testing suite covering parsing, stores, renames, completions, folding, and diagnostics:
+Runs the complete unit test suite. The suite covers parsing, stores, renames, completions, folding, and diagnostics:
 
 ```bash
 mise run test
@@ -74,8 +74,7 @@ vim.lsp.set_log_level("debug")
 vim.cmd("edit " .. vim.lsp.get_log_path())
 ```
 
-If you have the nvim plugin installed,
-you can use this to print the state index content:
+If you have the nvim plugin installed, you can use this command to print the state index content:
 
 ```plaintext
 :XsmdDump

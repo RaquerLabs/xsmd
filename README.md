@@ -4,13 +4,13 @@ Another LSP server for Markdown note-taking.
 
 ## Installation
 
-If you're on MacOS or Linux:
+On macOS or Linux, run this command:
 
 ```sh
 curl -sSfL https://raw.githubusercontent.com/RaquerLabs/xsmd/main/install.sh | sh
 ```
 
-If you're on windows:
+On Windows, run this command:
 
 ```powershell
 iwr https://raw.githubusercontent.com/RaquerLabs/xsmd/main/install.ps1 | iex
@@ -30,14 +30,14 @@ debug = false
 ignore = []
 ```
 
-The same settings can be provided per-editor through the LSP
-`initializationOptions` payload, which override `xsmd.toml`:
+You can provide the same settings per editor through the LSP `initializationOptions` payload.
+These settings override `xsmd.toml`:
 
 ```json
 { "debug": true, "ignore": ["/journal"] }
 ```
 
-In Neovim this is passed via `init_options`:
+In Neovim, you pass them with `init_options`:
 
 ```lua
 local lsp_config = {
@@ -51,7 +51,8 @@ vim.lsp.start(lsp_config)
 
 ### Neovim Setup
 
-To ensure Neovim launches a single `xsmd` process and correctly shares/reuses it across all open Markdown buffers, configure the server with a dynamically resolved `root_dir`, specify `name = "xsmd"`, and disable `single_file_support`:
+Make sure that Neovim launches a single `xsmd` process and shares it across all open Markdown buffers.
+Configure the server with a dynamic `root_dir`. Specify `name = "xsmd"`. Disable `single_file_support`:
 
 ```lua
 local lsp_config = {
@@ -74,43 +75,35 @@ vim.lsp.start(lsp_config)
 The server provides a list of commands for debug:
 
 - `xsmd.dumpState`: Outputs a list of all current indexed document keys to `xsmd.log`.
-  In Neovim, you can run this with:
+  In Neovim, you can run this command with:
   ```plaintext
   :XsmdDump
   ```
 
 ## Features Implemented
 
-- Workspace Crawling:
-  Scans your vault on boot,
-  locates the project root via the anchor file `xsmd.toml`.
-- Workspace File Watching:
-  Dynamically registers filesystem watchers for Markdown files (`**/*.md`, `**/*.markdown`)
-  to automatically keep the in-memory database in sync when files are changed externally.
-- Go to Definition:
-  - Links starting with `/` (e.g., `[Link](/docs/file.md)`) are resolved relative to the workspace root.
-  - Links not starting with `/` (e.g., `[Link](../file.md)`) are resolved relative to the current file's folder.
-- Find References
+- Workspace crawling: Scans your vault on boot and locates the project root with the anchor file `xsmd.toml`.
+- Workspace file watching: Registers filesystem watchers for Markdown files (`**/*.md`, `**/*.markdown`). The watchers keep the in-memory database in sync when files change externally.
+- Go to definition:
+  - The server resolves links that start with `/` (for example, `[Link](/docs/file.md)`) relative to the workspace root.
+  - The server resolves links that do not start with `/` (for example, `[Link](../file.md)`) relative to the folder of the current file.
+- Find references
 - Folding:
   - `# Headings`, `## Subheadings`
-  - nested lists (`-` or `*`)
+  - Nested lists (`-` or `*`)
 - Autocomplete:
-  - Caches the primary `# H1 Title` of every note in the directory.
-    Filtering out files that don't have `# H1 Title` headers.
-  - Typing `[` autocompletes with note names, adding the folder-relative `[Title Text](../path/to/note.md)` snippet.
-  - Typing `(` inside a link (e.g., `[Label](`) autocompletes with paths, also adds the folder-relative snippet.
-- Rename:
-  Moves files and automatically updates all reference links across the workspace.
+  - Caches the primary `# H1 Title` of every note in the directory. It excludes the notes that do not have a `# H1 Title` header.
+  - Typing `[` autocompletes with note names. It adds the folder-relative `[Title Text](../path/to/note.md)` snippet.
+  - Typing `(` inside a link (for example, `[Label](`) autocompletes with paths. It also adds the folder-relative snippet.
+- Rename: Moves files and updates all reference links across the workspace.
 
 ## Todo
 
-- [ ] Anchor completion: complete `#heading` anchors — in-file headings for
-      `[](#`, and target-file headings for links like `[x](file.md#` — backed
-      by a per-document heading index.
+- [ ] Anchor completion: Complete `#heading` anchors. The anchors are in-file headings for `[](#` and target-file headings for links like `[x](file.md#`. The feature uses a per-document heading index.
 
-## How It Works Under the Hood
+## How It Works
 
-The server communicates with Neovim using standard input/output (`stdin`/`stdout`) over JSON-RPC.
+The server communicates with Neovim over JSON-RPC. The transport is standard input/output (`stdin`/`stdout`).
 
 ```text
        ┌───────────┐      JSON-RPC (stdio)      ┌─────────────┐
@@ -131,9 +124,9 @@ The server communicates with Neovim using standard input/output (`stdin`/`stdout
 - [Architecture Guide](docs/architecture.md)
   - visual dependencies
   - modules map
-  - thread-safety concurrency locks
+  - concurrency locks
 - [Execution Flows](docs/flows.md)
-  - boot-time crawl indexing loops
+  - boot-time crawl loops
   - real-time diagnostics triggers
   - character coordinate parsing
 - [Development & Contributing](docs/development.md)
@@ -158,13 +151,13 @@ Launch the LSP server:
 ./dist/xsmd
 ```
 
-List indexed workspace files (ignoring configured directories):
+List the indexed workspace files, except the configured directories:
 
 ```bash
 ./dist/xsmd list
 ```
 
-List workspace files as JSON (`path`, `title`, `has_h1`), sorted by path:
+List the workspace files as JSON (`path`, `title`, `has_h1`), sorted by path:
 
 ```bash
 ./dist/xsmd list --json
@@ -176,7 +169,7 @@ Print the version:
 ./dist/xsmd --version
 ```
 
-To install it globally:
+Install globally:
 
 ```bash
 mise run install
@@ -190,7 +183,7 @@ mise run test
 
 ### How to Contribute
 
-1. Fork the repo and make your adjustments in the Go code.
-2. Format your files using `mise run format`.
-3. Assert that all unit tests pass with `mise run test`.
-4. Send a PR
+1. Fork the repo. Make your changes in the Go code.
+2. Format your files with `mise run format`.
+3. Run the tests with `mise run test`. Make sure that all unit tests pass.
+4. Send a PR.

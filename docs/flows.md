@@ -2,10 +2,8 @@
 
 ## Booting
 
-When the IDE initializes the client connection,
-the server finds the root,
-loads the `xsmd.toml` configuration,
-and indexes Markdown content asynchronously:
+When the IDE initializes the client connection, the server finds the root.
+The server loads the `xsmd.toml` configuration and indexes the Markdown content asynchronously:
 
 ```mermaid
 sequenceDiagram
@@ -62,37 +60,31 @@ The parser calculates the **exact byte offsets** of links in the source document
 1. AST Node Lookup:
    Detects a link node (`ast.KindLink`) during traversal.
 2. Sequential Search:
-   Matches pattern `](destination)` starting from the last matched offset.
+   Matches pattern `](destination)` from the last matched offset.
 3. Offset Resolution:
-   Scans backwards for the corresponding `[` bracket to frame the absolute start.
+   Scans backward for the corresponding `[` bracket. The bracket marks the absolute start.
 4. Column Calculation:
-   Computes exact start/end line coordinates and characters relative to the row's newline bytes.
+   Computes exact start/end line coordinates and characters relative to the newline bytes of the row.
 
-This prevents diagnostics or rename actions from bleeding into neighboring text.
-The sequential search and coordinate logic is centralized in the `parser.FindLinkAtPosition` helper.
+The exact offsets prevent diagnostics and rename actions from affecting the neighboring text.
+We centralize the sequential search and coordinate logic in the `parser.FindLinkAtPosition` helper.
 
 ## Link Resolution Strategy
 
-When resolving Markdown links across Definition lookup,
-references search, diagnostics, and renaming,
-all path calculations are unified and executed under
-the `ResolveLinkPath` and `CleanURIPath` helper methods in
-[internal/state/path.go](/internal/state/path.go):
+All path calculations use the `ResolveLinkPath` and `CleanURIPath` helper methods in [internal/state/path.go](/internal/state/path.go).
+The methods apply to definition lookup, reference search, diagnostics, and renaming:
 
-- Root-Relative Links (e.g. `[Note](/docs/note.md)`):
-  - Detected when the destination path starts with `/`.
-  - The leading `/` is stripped and the clean path is joined with the **Workspace Root**.
-- Folder-Relative Links (e.g. `[Note](../note.md)` or `[Note](sibling.md)`):
-  - Detected when the destination path does _not_ start with `/`.
-  - The path is resolved relative to the parent directory of the file containing the link.
-- Autocompletion:
-  - Supports two trigger patterns:
-    - `[`
-    - `(` inside an existing link (e.g., `[Label](`)
+- Root-relative links (for example, `[Note](/docs/note.md)`):
+  - The server detects a root-relative link when the destination path starts with `/`.
+  - The server removes the leading `/` and joins the clean path with the workspace root.
+- Folder-relative links (for example, `[Note](../note.md)` or `[Note](sibling.md)`):
+  - The server detects a folder-relative link when the destination path does not start with `/`.
+  - The server resolves the path relative to the parent directory of the file that contains the link.
+- Autocomplete: It supports two trigger patterns: `[`, and `(` inside an existing link (for example, `[Label](`).
 
 ## Real-Time Workspace Synchronization
 
-For external file changes, the server dynamically registers a filesystem watcher to keep its index completely in sync:
+The server registers a filesystem watcher dynamically. The watcher keeps its index in sync with external file changes:
 
 ```mermaid
 sequenceDiagram
