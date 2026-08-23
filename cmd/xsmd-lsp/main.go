@@ -12,7 +12,6 @@ import (
 
 	"github.com/RaquerLabs/xsmd/internal/lsp"
 	"github.com/RaquerLabs/xsmd/internal/state"
-	"github.com/tliron/glsp/server"
 )
 
 // version is the build version. Override at build time with
@@ -35,8 +34,7 @@ func main() {
 	serverState.DebugLog = logToFile(serverState)
 	handler := lsp.BuildHandler(serverState)
 
-	s := server.NewServer(handler, "xsmd-lsp", false)
-	log.Fatal(s.RunStdio())
+	log.Fatal(serve(serverState, handler))
 }
 
 func listNotes() {

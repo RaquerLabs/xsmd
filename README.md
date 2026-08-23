@@ -49,6 +49,17 @@ local lsp_config = {
 vim.lsp.start(lsp_config)
 ```
 
+### Debug Web UI
+
+When `debug = true`, the server serves a live trace of every LSP message at
+`http://127.0.0.1:8666`. The UI shows each message with its direction
+(client → server or server → client), kind, and payload, and pairs each
+request with its response (including the round-trip duration). The port is
+only bound while debug mode is on; with `debug = false` nothing listens.
+
+You can filter by method, direction, or kind, pause auto-scroll, collapse
+payloads, and clear the history.
+
 ### Neovim Setup
 
 Make sure that Neovim launches a single `xsmd` process and shares it across all open Markdown buffers.

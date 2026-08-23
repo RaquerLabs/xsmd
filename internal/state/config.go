@@ -3,6 +3,7 @@ package state
 import (
 	"bufio"
 	"encoding/json"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -44,6 +45,10 @@ func (s *ServerState) ApplyInitializationOptions(raw any) {
 			s.IgnoreDirs = ignore
 		}
 	}
+
+	if s.OnDebugChange != nil {
+		s.OnDebugChange(s.Debug)
+	}
 }
 
 // LoadConfig reads xsmd.toml from the workspace root and updates the Debug state and ignore list.
@@ -55,18 +60,22 @@ func (s *ServerState) LoadConfig() {
 	s.Debug = false
 	s.IgnoreDirs = nil
 
-	if s.WorkspaceRoot == "" {
-		return
+	if s.WorkspaceRoot != "" {
+		f, err := os.Open(filepath.Join(s.WorkspaceRoot, "xsmd.toml"))
+		if err == nil {
+			defer f.Close()
+			parseConfig(f, s)
+		}
 	}
 
-	tomlPath := filepath.Join(s.WorkspaceRoot, "xsmd.toml")
-	f, err := os.Open(tomlPath)
-	if err != nil {
-		return
+	if s.OnDebugChange != nil {
+		s.OnDebugChange(s.Debug)
 	}
-	defer f.Close()
+}
 
-	scanner := bufio.NewScanner(f)
+// parseConfig applies the xsmd.toml key/value pairs to s. The caller holds s.Mu.
+func parseConfig(r io.Reader, s *ServerState) {
+	scanner := bufio.NewScanner(r)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		// Ignore empty lines and comments

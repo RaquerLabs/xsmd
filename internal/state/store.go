@@ -27,6 +27,12 @@ type ServerState struct {
 	DebugLog         func(string)
 	IgnoreDirs       []string
 	ProcessedRenames map[string]string // Maps OldURI -> NewURI to avoid redundant workspaceWillRename updates
+
+	// OnDebugChange, if set, is called with the current Debug value after
+	// LoadConfig or ApplyInitializationOptions may have changed it. The
+	// callback runs while s.Mu is held, so it must not acquire the mutex.
+	// It may be invoked with the same value more than once.
+	OnDebugChange func(bool)
 }
 
 // NewServerState creates a new empty ServerState

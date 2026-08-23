@@ -182,3 +182,48 @@ func TestApplyInitializationOptionsNilAndUnknown(t *testing.T) {
 		t.Errorf("expected debug to be applied despite unknown fields")
 	}
 }
+
+func TestOnDebugChangeFiresOnConfigAndInitOptions(t *testing.T) {
+	tempDir, err := os.MkdirTemp(".", "xsmd-debug-change-*")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	s := NewServerState()
+	s.WorkspaceRoot = tempDir
+
+	var got []bool
+	s.OnDebugChange = func(debug bool) { got = append(got, debug) }
+
+	// debug = true in xsmd.toml must notify true
+	if err := os.WriteFile(filepath.Join(tempDir, "xsmd.toml"), []byte("debug = true\n"), 0644); err != nil {
+		t.Fatalf("failed to write xsmd.toml: %v", err)
+	}
+	s.LoadConfig()
+	if len(got) != 1 || got[0] != true {
+		t.Fatalf("expected one notification with true after LoadConfig, got %v", got)
+	}
+
+	// debug = false in xsmd.toml must notify false
+	if err := os.WriteFile(filepath.Join(tempDir, "xsmd.toml"), []byte("debug = false\n"), 0644); err != nil {
+		t.Fatalf("failed to write xsmd.toml: %v", err)
+	}
+	s.LoadConfig()
+	if len(got) != 2 || got[1] != false {
+		t.Fatalf("expected second notification with false, got %v", got)
+	}
+
+	// Client initializationOptions win and must notify their value
+	s.ApplyInitializationOptions(map[string]any{"debug": true})
+	if len(got) != 3 || got[2] != true {
+		t.Fatalf("expected third notification with true from init options, got %v", got)
+	}
+
+	// No debug key in options: value unchanged, but the callback still fires
+	// with the current value (the recorder treats it as a no-op).
+	s.ApplyInitializationOptions(map[string]any{"ignore": []any{"/x"}})
+	if len(got) != 4 || got[3] != true {
+		t.Fatalf("expected fourth notification with unchanged true, got %v", got)
+	}
+}

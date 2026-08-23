@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Adds a debug web UI at `http://127.0.0.1:8666` that traces every LSP message exchanged with the client. Requests render paired with their responses. The UI only starts when `debug = true` in `xsmd.toml` or in the client `initializationOptions`.
 - Registers `workspace/didChangeWatchedFiles` with the client to keep the in-memory index in sync with external changes.
 - Adds trace logging in `xsmd.log` for file watcher events (create, change, and delete).
 - Consolidates the duplicate link lookup algorithm into a centralized `parser.FindLinkAtPosition` helper.

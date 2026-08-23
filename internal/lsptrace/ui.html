@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>xsmd LSP trace</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #161a21;
+    --card: #1b2029;
+    --card-hover: #212836;
+    --border: #2a3040;
+    --text: #d7dce4;
+    --muted: #8b93a3;
+    --in: #4da3ff;
+    --out: #c792ea;
+    --kind-req: #56c8d8;
+    --kind-notif: #8b93a3;
+    --kind-resp: #7fd8a4;
+    --err: #ff6b6b;
+    --j-key: #9cdcfe;
+    --j-str: #ce9178;
+    --j-num: #b5cea8;
+    --j-lit: #569cd6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+    display: flex;
+    flex-direction: column;
+  }
+  header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  header h1 { font-size: 14px; font-weight: 600; letter-spacing: .02em; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #2fae5f; box-shadow: 0 0 6px #2fae5f;
+    display: inline-block; margin-right: 6px;
+  }
+  .count { color: var(--muted); }
+  .spacer { flex: 1; }
+  .toolbar {
+    display: flex; gap: 8px; align-items: center;
+    background: var(--panel); border-bottom: 1px solid var(--border);
+    padding: 8px 16px; flex-wrap: wrap;
+  }
+  input[type="search"], select {
+    background: var(--card); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 8px; font: inherit; outline: none;
+  }
+  input[type="search"]:focus, select:focus { border-color: var(--in); }
+  input[type="search"] { min-width: 240px; flex: 1; max-width: 480px; }
+  label.check { color: var(--muted); display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+  button {
+    background: var(--card); color: var(--text);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 5px 10px; font: inherit; cursor: pointer;
+  }
+  button:hover { background: var(--card-hover); }
+  button.danger:hover { border-color: var(--err); color: var(--err); }
+  #list { flex: 1; overflow-y: auto; padding: 12px 16px 32px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  .head {
+    width: 100%; display: flex; align-items: center; gap: 10px;
+    background: none; border: none; border-radius: 0;
+    padding: 7px 12px; text-align: left; color: var(--text);
+  }
+  .head:hover { background: var(--card-hover); }
+  .time { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .badge {
+    border-radius: 4px; padding: 1px 7px; font-size: 11px; font-weight: 600;
+    letter-spacing: .03em; white-space: nowrap;
+  }
+  .dir-in  { background: rgba(77,163,255,.16); color: var(--in); }
+  .dir-out { background: rgba(199,146,234,.16); color: var(--out); }
+  .kind-req   { background: rgba(86,200,216,.14); color: var(--kind-req); }
+  .kind-notif { background: rgba(139,147,163,.14); color: var(--kind-notif); }
+  .kind-resp  { background: rgba(127,216,164,.14); color: var(--kind-resp); }
+  .kind-err   { background: rgba(255,107,107,.14); color: var(--err); }
+  .method {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12.5px; font-weight: 500;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .id { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .dur { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .chev { margin-left: auto; color: var(--muted); transition: transform .12s; }
+  .card.open .chev { transform: rotate(90deg); }
+  .body { display: none; border-top: 1px solid var(--border); }
+  .card.open .body { display: block; }
+  .payload { padding: 10px 12px; }
+  .label {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--muted); margin-bottom: 5px;
+  }
+  pre {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px; line-height: 1.5;
+    background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 10px; overflow-x: auto; white-space: pre;
+  }
+  .resp { border-top: 1px dashed var(--border); }
+  .resp-head {
+    padding: 8px 12px 0; font-size: 11px; color: var(--muted);
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  }
+  .j-key { color: var(--j-key); }
+  .j-str { color: var(--j-str); }
+  .j-num { color: var(--j-num); }
+  .j-lit { color: var(--j-lit); }
+  .j-punc { color: var(--muted); }
+  .empty {
+    color: var(--muted); text-align: center; padding: 60px 20px;
+  }
+  .empty strong { color: var(--text); display: block; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="dot"></span>xsmd LSP trace</h1>
+  <span class="count" id="count"></span>
+  <span class="spacer"></span>
+  <span class="count" id="addr"></span>
+</header>
+<div class="toolbar">
+  <input type="search" id="search" placeholder="Filter by method, id, or payload…" autocomplete="off">
+  <select id="dirFilter" title="Message direction">
+    <option value="all">all directions</option>
+    <option value="client">client → server</option>
+    <option value="server">server → client</option>
+  </select>
+  <select id="kindFilter" title="Message kind">
+    <option value="all">all kinds</option>
+    <option value="request">requests</option>
+    <option value="notification">notifications</option>
+    <option value="response">responses</option>
+  </select>
+  <label class="check"><input type="checkbox" id="autoScroll" checked> auto-scroll</label>
+  <button class="danger" id="clearBtn" title="Drop all recorded messages">clear</button>
+</div>
+<div id="list">
+  <div class="empty" id="empty">
+    <strong>No messages yet</strong>
+    Traffic appears here as soon as the LSP client connects.
+    Requests render with their response attached when one arrives.
+  </div>
+</div>
+<script>
+(function () {
+  "use strict";
+
+  var state = { all: [], lastSeq: 0 };
+  var listEl = document.getElementById("list");
+  var emptyEl = document.getElementById("empty");
+  var searchEl = document.getElementById("search");
+  var dirEl = document.getElementById("dirFilter");
+  var kindEl = document.getElementById("kindFilter");
+  var autoEl = document.getElementById("autoScroll");
+  var countEl = document.getElementById("count");
+
+  function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  function pretty(raw) {
+    if (raw === null || raw === undefined || raw === "") return "";
+    if (typeof raw === "string") {
+      try { return JSON.stringify(JSON.parse(raw), null, 2); }
+      catch (e) { return raw; }
+    }
+    try { return JSON.stringify(raw, null, 2); }
+    catch (e) { return String(raw); }
+  }
+
+  function highlightJSON(text) {
+    var esc = escapeHtml(text);
+    var re = /("(?:\\.|[^"\\])*")(\s*:)?|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|\b(true|false|null)\b/g;
+    var out = "", last = 0, m;
+    while ((m = re.exec(esc)) !== null) {
+      out += esc.slice(last, m.index);
+      if (m[1] !== undefined) {
+        out += '<span class="j-key">' + m[1] + "</span>";
+        if (m[2] !== undefined) out += '<span class="j-punc">' + m[2] + "</span>";
+      } else if (m[3] !== undefined) {
+        out += '<span class="j-num">' + m[3] + "</span>";
+      } else {
+        out += '<span class="j-lit">' + m[4] + "</span>";
+      }
+      last = m.index + m[0].length;
+    }
+    return out + esc.slice(last);
+  }
+
+  function pad2(n) { return n < 10 ? "0" + n : String(n); }
+  function pad3(n) { return n < 100 ? (n < 10 ? "00" + n : "0" + n) : String(n); }
+
+  function fmtTime(t) {
+    var d = new Date(t);
+    return pad2(d.getHours()) + ":" + pad2(d.getMinutes()) + ":" + pad2(d.getSeconds()) + "." + pad3(d.getMilliseconds());
+  }
+
+  function fmtDur(ms) {
+    if (ms === null) return "";
+    if (ms < 1) return "<1ms";
+    if (ms < 1000) return ms.toFixed(ms < 10 ? 1 : 0) + "ms";
+    var s = ms / 1000;
+    if (s < 60) return s.toFixed(1) + "s";
+    return Math.floor(s / 60) + "m " + Math.round(s % 60) + "s";
+  }
+
+  function displayID(raw) {
+    if (!raw) return "";
+    try {
+      var v = JSON.parse(raw);
+      return String(v);
+    } catch (e) { return raw; }
+  }
+
+  function opp(dir) { return dir === "client" ? "server" : "client"; }
+  function pairKey(dir, id) { return dir + "\u0000" + id; }
+
+  function hasError(m) { return m.kind === "response" && m.error; }
+  function badgeClass(m) {
+    if (hasError(m)) return "kind-err";
+    if (m.kind === "request") return "kind-req";
+    if (m.kind === "notification") return "kind-notif";
+    return "kind-resp";
+  }
+  function kindLabel(m) { return hasError(m) ? "error" : m.kind; }
+
+  function payloadBlock(label, raw) {
+    if (!raw) return "";
+    return '<div class="payload"><div class="label">' + label + "</div>" +
+      "<pre>" + highlightJSON(pretty(raw)) + "</pre></div>";
+  }
+
+  function itemHTML(it) {
+    var m = it.head;
+    var dirCls = m.direction === "client" ? "dir-in" : "dir-out";
+    var dirName = m.direction === "client" ? "IN" : "OUT";
+    var dirTitle = m.direction === "client" ? "client \u2192 server" : "server \u2192 client";
+    var idTxt = m.id ? " #" + displayID(m.id) : "";
+    var durTxt = it.durMs !== null ? " \u00b7 " + fmtDur(it.durMs) : "";
+    var resp = "";
+    if (it.resp) {
+      var r = it.resp;
+      resp = '<div class="resp"><div class="resp-head">' +
+        '<span class="badge ' + (r.direction === "client" ? "dir-in" : "dir-out") + '">' +
+        (r.direction === "client" ? "IN" : "OUT") + "</span>" +
+        '<span class="badge ' + badgeClass(r) + '">' + kindLabel(r) + "</span>" +
+        (r.id ? '<span class="id">#' + displayID(r.id) + "</span>" : "") +
+        durTxt + "</div>" +
+        payloadBlock("result", r.result) +
+        payloadBlock("error", r.error) +
+        "</div>";
+    }
+    return '<div class="card open">' +
+      '<button class="head" title="' + dirTitle + '">' +
+      '<span class="time">' + fmtTime(m.time) + "</span>" +
+      '<span class="badge ' + dirCls + '">' + dirName + "</span>" +
+      '<span class="badge ' + badgeClass(m) + '">' + kindLabel(m) + "</span>" +
+      '<span class="method">' + escapeHtml(m.method || "") + "</span>" +
+      (idTxt ? '<span class="id">' + idTxt + "</span>" : "") +
+      '<span class="chev">\u25b8</span>' +
+      "</button><div class=\"body\">" +
+      payloadBlock("params", m.params) +
+      resp +
+      "</div></div>";
+  }
+
+  function matchText(it, q) {
+    if (!q) return true;
+    var m = it.head;
+    var hay = [m.method, m.id, m.params, m.error];
+    if (it.resp) hay.push(it.resp.result, it.resp.error);
+    for (var i = 0; i < hay.length; i++) {
+      if (hay[i] && String(hay[i]).toLowerCase().indexOf(q) !== -1) return true;
+    }
+    return false;
+  }
+
+  function buildItems() {
+    var respByKey = {};
+    for (var i = 0; i < state.all.length; i++) {
+      var m = state.all[i];
+      if (m.kind === "response") respByKey[pairKey(opp(m.direction), m.id)] = m;
+    }
+    var items = [];
+    for (var j = 0; j < state.all.length; j++) {
+      var x = state.all[j];
+      if (x.kind === "response") {
+        var key = pairKey(opp(x.direction), x.id);
+        if (respByKey[key] === x) {
+          items.push({ head: x, resp: null, durMs: null });
+          delete respByKey[key];
+        }
+        continue;
+      }
+      if (x.kind === "request") {
+        var rkey = pairKey(x.direction, x.id);
+        var resp = respByKey[rkey] || null;
+        if (resp) delete respByKey[rkey];
+        items.push({ head: x, resp: resp, durMs: resp ? new Date(resp.time) - new Date(x.time) : null });
+        continue;
+      }
+      items.push({ head: x, resp: null, durMs: null });
+    }
+    return items;
+  }
+
+  function render() {
+    var dir = dirEl.value, kind = kindEl.value, q = searchEl.value.trim().toLowerCase();
+    var items = buildItems().filter(function (it) {
+      var m = it.head;
+      if (dir !== "all" && m.direction !== dir) return false;
+      if (kind !== "all" && m.kind !== kind) return false;
+      return matchText(it, q);
+    });
+    var html = "";
+    for (var i = 0; i < items.length; i++) html += itemHTML(items[i]);
+    listEl.innerHTML = html || '<div class="empty"><strong>No matching messages</strong>Adjust the filters or wait for more traffic.</div>';
+    countEl.textContent = state.all.length + " recorded";
+  }
+
+  function scrollBottom() {
+    if (autoEl.checked) listEl.scrollTop = listEl.scrollHeight;
+  }
+
+  async function poll() {
+    try {
+      var res = await fetch("/api/messages?since=" + state.lastSeq);
+      if (!res.ok) throw new Error(String(res.status));
+      var data = await res.json();
+      if (data.messages.length) {
+        state.all = state.all.concat(data.messages);
+        state.lastSeq = data.seq;
+        render();
+        scrollBottom();
+      }
+    } catch (e) { /* server not up yet */ }
+  }
+
+  listEl.addEventListener("click", function (e) {
+    var head = e.target.closest(".head");
+    if (head) head.parentElement.classList.toggle("open");
+  });
+
+  document.getElementById("clearBtn").addEventListener("click", async function () {
+    await fetch("/api/messages", { method: "DELETE" });
+    state.all = [];
+    render();
+  });
+
+  searchEl.addEventListener("input", render);
+  dirEl.addEventListener("change", render);
+  kindEl.addEventListener("change", render);
+  autoEl.addEventListener("change", function () { if (autoEl.checked) scrollBottom(); });
+
+  poll();
+  setInterval(poll, 600);
+})();
+</script>
+</body>
+</html>
